@@ -1,0 +1,8 @@
+[package]
+name = "hearts-cli"
+version.workspace = true
+edition.workspace = true
+description = "Terminal client for playing the game locally."
+
+[dependencies]
+hearts-core.workspace = true
