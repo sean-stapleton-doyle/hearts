@@ -1,7 +1,0 @@
-[package]
-name = "hearts-core"
-version.workspace = true
-edition.workspace = true
-description = "Pure domain model for the game: no I/O, no async, no dependencies."
-
-[dependencies]

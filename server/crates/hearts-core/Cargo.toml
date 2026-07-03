@@ -1,0 +1,19 @@
+[package]
+name = "hearts-core"
+version.workspace = true
+edition.workspace = true
+description = "Pure domain model for the game: no I/O, no async, no default dependencies."
+
+[features]
+# Serialize/Deserialize on every public type, for snapshots and wire formats.
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[[test]]
+name = "serde_roundtrip"
+required-features = ["serde"]

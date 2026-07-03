@@ -1,2 +1,17 @@
-/target
+target/
+node_modules/
 /graphify-out
+.env
+
+# Python (hearts-py bindings)
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+dist/
+wheels/
+
+# Analysis (analysis/)
+analysis/data/
+.ipynb_checkpoints/

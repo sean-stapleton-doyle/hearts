@@ -1,8 +1,0 @@
-[package]
-name = "hearts-server"
-version.workspace = true
-edition.workspace = true
-description = "Game server (Axum) exposing hearts-core over the network."
-
-[dependencies]
-hearts-core.workspace = true

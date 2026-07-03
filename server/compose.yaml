@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: hearts-postgres
+    environment:
+      POSTGRES_USER: hearts
+      POSTGRES_PASSWORD: hearts
+      POSTGRES_DB: hearts
+    ports:
+      - "5432:5432"
+    volumes:
+      # The postgres:18 image moved PGDATA under /var/lib/postgresql
+      # (versioned subdirectory); mount the parent, not .../data.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hearts -d hearts"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:
