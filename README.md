@@ -9,29 +9,32 @@ whole game is deterministic from one seed.
 
 | Path | What it is |
 |---|---|
-| `server/` | Rust workspace: the game engine, the game server, and the terminal client. |
+| `crates/` | Rust workspace: the game engine, the game server, the terminal client, and Python bindings. |
 | `web/` | React + Vite + Tailwind + TanStack Router frontend. |
 
-### `server/` workspace
+### `crates/` workspace
 
 | Crate | What it is |
 |---|---|
-| `server/crates/hearts-core` | The rules engine: pure domain logic, zero deps, optional `serde` feature. Reused by the server, the CLI, and (planned) Python bindings. |
-| `server/crates/hearts-server` | Axum game server: anonymous sessions, lobbies with invite codes, REST actions + SSE events, per-round snapshots with boot recovery, turn timeouts, lite accounts. |
-| `server/crates/hearts-cli` | ratatui terminal client: lobby, live play over SSE, accounts and history. |
+| `crates/hearts-core` | The rules engine: pure domain logic, zero deps, optional `serde` feature. Reused by the server, the CLI, and the Python bindings. |
+| `crates/hearts-server` | Axum game server: anonymous sessions, lobbies with invite codes, REST actions + SSE events, per-round snapshots with boot recovery, turn timeouts, lite accounts. |
+| `crates/hearts-cli` | ratatui terminal client: lobby, live play over SSE, accounts and history. |
+| `crates/hearts-py` | PyO3 bindings exposing the engine to Python as `pyhearts`. |
 
 ## Docs
 
-- [server/docs/card-game-spec.md](server/docs/card-game-spec.md) — the rules; source of truth for the engine.
-- [server/docs/server-design.md](server/docs/server-design.md) — architecture decisions for the backend.
-- [server/docs/api.md](server/docs/api.md) — **the API reference for building clients.**
+- [docs/card-game-spec.md](docs/card-game-spec.md) — the rules; source of truth for the engine.
+- [docs/server-design.md](docs/server-design.md) — architecture decisions for the backend.
+- [docs/api.md](docs/api.md) — **the API reference for building clients.**
+- [docs/python-bindings.md](docs/python-bindings.md) — design for `crates/hearts-py`.
+- [web/docs/frontend-design.md](web/docs/frontend-design.md) — routes, session model, and API client plan for the web client.
+- [deploy/README.md](deploy/README.md) — deploying to a VPS with your own domain (Docker Compose + Caddy).
 
 ## Development
 
 ### Backend
 
 ```sh
-cd server
 docker compose up -d              # dev Postgres (hearts/hearts on :5432)
 cp .env.example .env
 cargo run -p hearts-server        # runs migrations, serves on :8080

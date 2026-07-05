@@ -1,17 +1,786 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/archivo/wdth.css';
 
-@import "tailwindcss";
+/* ────────────────────────────────────────────────────────────────────────
+   Bold & graphic theme: "club poster meets card table". Flat felt field,
+   paper cards with hard ink outlines, oversized numerals, hard offset
+   shadows instead of blur, no gradients. Hearts are permanent trump — red
+   is the one loaded accent. ─────────────────────────────────────────── */
 
-* {
-  box-sizing: border-box;
+@theme {
+  /* Palette */
+  --color-felt: #1a6b45; /* table field */
+  --color-felt-deep: #114a30; /* field shading / pressed */
+  --color-parch: #efe6d2; /* page background (warmer than card faces) */
+  --color-paper: #faf6ec; /* card faces, panels */
+  --color-ink: #16150f; /* text, borders, black suits */
+  --color-trump: #e03a2f; /* hearts/diamonds, active turn, primary actions */
+  --color-trump-deep: #b52a20; /* pressed/hover trump */
+  --color-chip: #f5b942; /* dealer button, winner gold */
+  --color-legal: #2f7fe0; /* legal-play ring */
+  --color-mute: #8a917f; /* away players, secondary text */
+
+  /* Type */
+  --font-display: 'Archivo Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-body:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  /* Hard offset shadows — the bold look uses no blur */
+  --shadow-hard-sm: 2px 2px 0 0 #16150f;
+  --shadow-hard: 4px 4px 0 0 #16150f;
+  --shadow-hard-lg: 6px 6px 0 0 #16150f;
+
+  --radius-card: 0.5rem;
+
+  /* Card footprint — shared by the real `.card` art and the disposable
+     `.deal-card` ghosts (lib/anim.ts appends those straight to
+     `document.body`, outside any `.card` scope, so the size has to live
+     at root to reach them). Overridden together at the desktop breakpoint
+     below. */
+  --card-w: 58px;
+  --card-h: 82px;
+
+  /* Keyframes exposed as animate-* utilities (defined at top level below,
+     so plain `animation:` references also work) */
+  --animate-seat-pulse: seat-pulse 1.8s ease-in-out infinite;
+  --animate-sheet-up: sheet-up 0.25s ease;
+  --animate-pop-in: pop-in 0.22s ease;
 }
 
-html,
-body,
-#app {
-  min-height: 100%;
+@keyframes seat-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(224, 58, 47, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(224, 58, 47, 0.25);
+  }
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+}
+@keyframes pop-in {
+  from {
+    transform: scale(0.96) translateY(8px);
+    opacity: 0;
+  }
 }
 
-body {
+/* ── LEGACY VARIABLE REMAP ────────────────────────────────────────────────
+   The pre-rewrite component CSS below reads these variables. They are
+   remapped onto the new palette so un-migrated screens render in the new
+   identity. Delete alongside the legacy blocks (Phases 2–5). */
+:root {
+  --paper: var(--color-parch);
+  --surface: var(--color-paper);
+  --surface-2: #e7dcc3;
+  --ink: var(--color-ink);
+  --ink-soft: #4a4738;
+  --muted: var(--color-mute);
+  --line: #d8cdb4;
+  --line-strong: var(--color-ink);
+  --accent: var(--color-trump);
+  --accent-strong: var(--color-trump-deep);
+  --accent-soft: #fbe3e0;
+  --heart: var(--color-trump);
+  --shadow-sm: var(--shadow-hard-sm);
+  --shadow-md: var(--shadow-hard);
+  --shadow-lg: var(--shadow-hard-lg);
+  --radius: 0.6rem;
+  color-scheme: light;
+}
+
+@layer base {
+  html,
+  body,
+  #app {
+    min-height: 100%;
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-parch);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-stretch: 118%;
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+    margin: 0;
+  }
+  h1 {
+    font-size: 2.2rem;
+    line-height: 1.05;
+  }
+  h2 {
+    font-size: 1.4rem;
+  }
+  h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0;
+  }
+  a {
+    color: var(--color-trump-deep);
+    text-decoration: none;
+  }
+  a:hover {
+    text-decoration: underline;
+  }
+  code {
+    background: var(--surface-2);
+    padding: 0.05em 0.4em;
+    border-radius: 0.3rem;
+    font-size: 0.92em;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-legal);
+    outline-offset: 2px;
+  }
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+  input {
+    padding: 0.7rem 0.8rem;
+    border: 2px solid var(--color-ink);
+    border-radius: var(--radius);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-size: 1rem;
+    width: 100%;
+  }
+  input:focus {
+    outline: none;
+    box-shadow: var(--shadow-hard-sm);
+  }
+
+  button {
+    padding: 0.65rem 1rem;
+    border: 2px solid var(--color-ink);
+    border-radius: var(--radius);
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: var(--shadow-hard-sm);
+    transition:
+      background 0.15s ease,
+      box-shadow 0.15s ease,
+      translate 0.15s ease;
+  }
+  button:hover:not(:disabled) {
+    background: #fffdf5;
+  }
+  button:active:not(:disabled) {
+    box-shadow: 0 0 0 0 var(--color-ink);
+    translate: 2px 2px;
+  }
+  button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+}
+
+/* Shared helpers used across legacy + new components */
+.muted {
+  color: var(--color-mute);
+}
+.error {
+  color: var(--color-trump-deep);
+  font-weight: 600;
+}
+.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.primary {
+  background: var(--color-trump);
+  border-color: var(--color-ink);
+  color: #fff;
+}
+.primary:hover:not(:disabled) {
+  background: var(--color-trump-deep);
+}
+.ghost {
+  padding: 0.45rem 0.75rem;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+.ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: transparent;
+  color: var(--color-ink);
+}
+.danger {
+  background: transparent;
+  border-color: var(--color-trump-deep);
+  color: var(--color-trump-deep);
+}
+.danger:hover:not(:disabled) {
+  background: var(--color-trump-deep);
+  color: #fff;
+}
+
+@layer components {
+  /* ── Card (swappable art layer) ─────────────────────────────────────────
+     Bold redraw: 2px ink border, hard shadow, oversized display-face rank,
+     flat suit color. The outer element carries data-flip-id — GSAP owns
+     transforms, so states never use transform. */
+  .card {
+    position: relative;
+    /* Above ordinary table containers (felt, action dock — both z-index
+       auto) so a card mid-Flip doesn't paint underneath whichever one it's
+       transiently overlapping (e.g. a played card, still visually over the
+       hand dock at the start of its flight into the trick area, used to
+       render behind the dock's own background). Below seat rings don't
+       need clearing — 15 sits above them (z-10) too, which reads fine when
+       a card sails past a seat chip mid-flight; still under the round-gate
+       overlay (20) and every layer above it. */
+    z-index: 15;
+    width: var(--card-w);
+    height: var(--card-h);
+    padding: 0;
+    border: 2px solid var(--color-ink);
+    border-radius: var(--radius-card);
+    background: var(--color-paper);
+    box-shadow: var(--shadow-hard-sm);
+    overflow: hidden;
+    transition:
+      box-shadow 0.2s ease,
+      opacity 0.2s ease,
+      filter 0.2s ease,
+      margin 0.15s ease;
+  }
+  .card--sm {
+    --card-w: 46px;
+    --card-h: 64px;
+  }
+  .card--lg {
+    --card-w: 72px;
+    --card-h: 101px;
+  }
+  .card__face {
+    position: absolute;
+    inset: 3px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    font-family: var(--font-display);
+    font-weight: 800;
+  }
+  .card__corner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 0.95;
+    font-size: 0.85rem;
+  }
+  .card--sm .card__corner {
+    font-size: 0.7rem;
+  }
+  .card__corner--bottom {
+    align-self: flex-end;
+    transform: rotate(180deg);
+  }
+  .card__suit {
+    font-size: 0.8em;
+  }
+  .card__pip {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 1.7rem;
+  }
+  .card--sm .card__pip {
+    font-size: 1.2rem;
+  }
+  .suit-hearts,
+  .suit-diamonds {
+    color: var(--color-trump);
+  }
+  .suit-clubs,
+  .suit-spades {
+    color: var(--color-ink);
+  }
+  /* States. No transform here — GSAP owns transforms during motion. */
+  .card.is-static {
+    opacity: 1;
+  }
+  .card.is-interactive {
+    cursor: pointer;
+  }
+  .card.is-interactive:not(.is-legal) {
+    opacity: 0.38;
+    filter: saturate(0.3);
+  }
+  .card.is-legal {
+    box-shadow:
+      0 0 0 3px var(--color-legal),
+      var(--shadow-hard-sm);
+  }
+  .card.is-interactive.is-legal:hover {
+    box-shadow:
+      0 0 0 4px var(--color-legal),
+      var(--shadow-hard);
+  }
+  .card.is-selected {
+    border-color: var(--color-trump);
+    box-shadow:
+      0 0 0 4px var(--color-trump),
+      var(--shadow-hard);
+    /* Clears the overlapping neighbors in the fanned hand once lifted —
+       GSAP drives the lift itself (useSelectionLift in lib/anim.ts). */
+    z-index: 5;
+  }
+
+  /* ── Deal animation: disposable card backs flying dealer → seats ──────
+     .deal-layer / .deal-card are created imperatively by lib/anim.ts (not
+     JSX) — the class names must survive verbatim. z ladder: board < deal
+     layer (30) < sheet/backdrop (40) < modal (50). */
+  .deal-layer {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 30;
+  }
+  .deal-card {
+    position: absolute;
+    left: 0;
+    top: 0;
+    /* Same footprint as a real hand card (var(--card-w/h), root-scoped
+       above) — these used to be a fixed 18×26px, roughly a third of the
+       real card size, so the deal looked like it was flinging confetti
+       instead of cards. */
+    width: var(--card-w);
+    height: var(--card-h);
+    border: 2px solid var(--color-ink);
+    border-radius: var(--radius-card);
+    background: var(--color-trump);
+    box-shadow: var(--shadow-hard-sm);
+    visibility: hidden; /* GSAP autoAlpha reveals each card as it leaves the dealer */
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   LEGACY component CSS below — pre-rewrite classes reading the remapped
+   variables above. Blocks are deleted as their components migrate to
+   Tailwind utilities (Phases 2–5).
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Game table layout ────────────────────────────────────────────────── */
+.table {
+  height: 100dvh;
+  display: flex;
+  padding: 0.7rem 0.9rem calc(0.9rem + env(safe-area-inset-bottom));
+}
+.table__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+/* Score history floats over the left-hand whitespace on wide screens (see
+   the media query below); everywhere else it lives in the bottom sheet. */
+.table__scores-panel {
+  display: none;
+}
+.table__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+/* Tricks pile: one face-down card per trick won, fanned diagonally the way
+   a real trick pile gets picked up and stacked at the table, plus an exact
+   count chip since eyeballing a dense fan past 5-6 cards stops being
+   reliable (see TricksPile.tsx — the fan compresses, never truncates, so
+   the full count up to a 26-card round always renders). */
+.tricks {
+  height: 2.1rem;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.35rem;
+}
+.tricks--xs {
+  height: 1.65rem;
+  --tricks-card-w: 0.95rem;
+  --tricks-card-h: 1.35rem;
+}
+.tricks__stack {
+  position: relative;
+  /* Fixed to the worst-case footprint (card + full spread) — TricksPile.tsx
+     computes its per-card offset off the same TRICKS_MAX_SPREAD_PX, so the
+     stack never outgrows this regardless of how many tricks are stacked. */
+  width: calc(var(--tricks-card-w, 1.25rem) + 26px);
+  height: 100%;
+}
+.tricks__card {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: var(--tricks-card-w, 1.25rem);
+  height: var(--tricks-card-h, 1.75rem);
+  border: 1.5px solid var(--color-ink);
+  border-radius: 0.25rem;
+  background: var(--color-trump);
+  box-shadow: var(--shadow-hard-sm);
+}
+.tricks__count {
+  align-self: center;
+  min-width: 1.2rem;
+  padding: 0.05rem 0.3rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  font-weight: 700;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.tricks__empty {
+  width: var(--tricks-card-w, 1.25rem);
+  height: var(--tricks-card-h, 1.75rem);
+  border: 1px dashed var(--line);
+  border-radius: 0.25rem;
+  opacity: 0.4;
+}
+
+/* ── Hand (action dock) ───────────────────────────────────────────────── */
+.chip {
+  min-width: 2.4rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 999px;
+  background: var(--surface);
+  font-weight: 700;
+}
+.chip.is-selected {
+  background: var(--color-trump);
+  border-color: var(--color-ink);
+  color: #fff;
+}
+.hand__row {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  width: 100%;
+  overflow-x: auto;
+  /* Extra top padding gives the selection lift (translateY) headroom —
+     `overflow-x: auto` here computes `overflow-y` to `auto` too per the CSS
+     overflow spec, so a lifted card would otherwise get clipped. Side
+     padding does the same job horizontally: the lift also rotates/scales
+     the card, which shifts its box sideways, and with zero side padding
+     that stroke got clipped against the scroll container's edge for
+     whichever card sat at either end of the fan. */
+  padding: 1.25rem 0.75rem 0.4rem;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.hand__row::-webkit-scrollbar {
+  display: none;
+}
+.hand__row .card {
+  margin-left: -22px;
+}
+.hand__row .card:first-child {
+  margin-left: 0;
+}
+.confirm {
+  min-width: 9rem;
+  background: var(--color-trump);
+  border-color: var(--color-ink);
+  color: #fff;
+}
+.confirm:hover:not(:disabled) {
+  background: var(--color-trump-deep);
+}
+
+/* ── Countdown ────────────────────────────────────────────────────────────
+   Lives inside the active seat, so it draws in whatever the seat's text
+   color is (white on trump red); low time flips to chip gold. */
+.countdown {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: inherit;
+}
+.countdown__ring {
+  width: 22px;
+  height: 22px;
+}
+.countdown__track {
+  fill: none;
+  stroke: currentColor;
+  opacity: 0.3;
+}
+.countdown__fill {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s linear;
+}
+.countdown.is-low .countdown__fill,
+.countdown.is-low .countdown__label {
+  color: var(--color-chip);
+  stroke: var(--color-chip);
+}
+.countdown__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Scoreboard sheet ─────────────────────────────────────────────────── */
+/* Overlay stacking: table content (incl. z-indexed tricks cards) < deal
+   layer (30) < sheet/backdrop (40) < modal (50). */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(22, 21, 15, 0.35);
+}
+.sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  background: var(--paper);
+  border-top: 2px solid var(--color-ink);
+  border-top-left-radius: 1.1rem;
+  border-top-right-radius: 1.1rem;
+  padding: 0.5rem 1rem calc(1rem + env(safe-area-inset-bottom));
+  animation: sheet-up 0.25s ease;
+}
+.scoreboard__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+}
+.scoreboard h3,
+.modal__panel h3 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-stretch: 118%;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.scoreboard__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+.scoreboard__table th {
+  text-align: left;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  padding: 0.5rem 0.4rem;
+  border-bottom: 2px solid var(--color-ink);
+}
+.scoreboard__table th.num,
+.scoreboard__table td.num {
+  text-align: right;
+}
+.scoreboard__table td {
+  padding: 0.55rem 0.4rem;
+  border-bottom: 1px solid var(--line);
+}
+.scoreboard__table tr.is-you td {
+  background: var(--accent-soft);
+}
+
+/* Rounds × players grid: each cell packs bid · tricks over Δ · total */
+.scoreboard__table--rounds th,
+.scoreboard__table--rounds td {
+  text-align: center;
+}
+.scoreboard__table--rounds th.is-you,
+.scoreboard__table--rounds td.is-you {
+  background: var(--accent-soft);
+}
+.scoreboard__round-col {
+  width: 2rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.scoreboard__live td {
+  border-bottom-style: dashed;
+}
+.round-cell {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 0.5rem;
+  justify-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.round-cell__bid,
+.round-cell__tricks {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+.round-cell__delta {
+  font-size: 0.85rem;
+}
+.round-cell__delta.is-gain {
+  color: var(--color-felt);
+}
+.round-cell__delta.is-loss {
+  color: var(--color-trump);
+}
+.round-cell__total {
+  font-weight: 700;
+}
+.round-cell__pending {
+  grid-column: 1 / -1;
+}
+.scoreboard__legend {
+  margin: 0.5rem 0 0;
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+/* ── Round-end recap (embedded on the felt, not a modal overlay) ──────── */
+/* `.modal__panel` is the card chrome; `.round-recap` positions it centered
+   over the felt. The old fixed-position `.modal`/backdrop wrapper and the
+   auto-dismiss timer bar are gone — the recap is a table state now. */
+.modal__panel {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 24rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  background: var(--paper);
+  border: 2px solid var(--color-ink);
+  border-radius: 0.9rem;
+  box-shadow: var(--shadow-hard-lg);
+  padding: 1.1rem 1.25rem;
+  animation: pop-in 0.22s ease;
+}
+.round-recap {
+  box-shadow: var(--shadow-hard-lg);
+}
+/* Table-menu kebab + its popover: anchored under the button, above every
+   other table layer but below the round-end gate (z-20) which it can't
+   coexist with anyway — the gate takes the mutation focus at that point. */
+.table__menu-toggle {
+  padding: 0.4rem 0.55rem;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.table__menu-panel {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 0.4rem);
+  z-index: 30;
+  width: 15rem;
+  /* The toggle sits near the left edge of the header (right after the
+     round/phase label), not the right — anchoring from the right made the
+     panel grow leftward off the edge of narrow screens. Clamped so it also
+     can't overflow the *right* edge on the narrowest phones. */
+  max-width: calc(100vw - 2rem);
+  padding: 0.85rem 1rem;
+  gap: 0.6rem;
+}
+.modal__panel h3 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-stretch: 118%;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.modal__note {
   margin: 0;
+  font-size: 0.88rem;
+  text-align: center;
 }
 
+/* ── Larger screens: bigger cards, side scoreboard ────────────────────── */
+@media (min-width: 768px) {
+  :root {
+    --card-w: 68px;
+    --card-h: 96px;
+  }
+  .card--sm {
+    --card-w: 54px;
+    --card-h: 76px;
+  }
+  .hand__row .card {
+    margin-left: -12px;
+  }
+}
+
+/* ── Wide screens: score history floats over the left whitespace ────────
+   Floating (not in flow) so the game stays centered; only enabled once the
+   window is wide enough that the panel can't overlap the board. Narrower
+   screens keep the Scores toggle + bottom sheet. */
+@media (min-width: 1100px) {
+  .table__scores-panel {
+    display: block;
+    position: fixed;
+    left: 0.9rem;
+    top: 0.7rem;
+    width: 18rem;
+    max-height: calc(100dvh - 1.4rem);
+    overflow-y: auto;
+    z-index: 20; /* above the board, below deal layer (30) and sheets (40) */
+  }
+  .table__scores-panel .scoreboard {
+    background: var(--surface);
+    border: 2px solid var(--color-ink);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-hard);
+    padding: 0.3rem 0.8rem 0.8rem;
+  }
+  /* The sheet toggle is redundant next to the always-on panel. */
+  .table__scores-toggle {
+    display: none;
+  }
+  /* Keep the whole board (felt included) clear of the floating panel. */
+  .table {
+    padding-left: 19.8rem;
+  }
+}
+
+/* ── Reduced motion ───────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

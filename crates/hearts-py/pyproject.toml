@@ -1,0 +1,35 @@
+[build-system]
+requires = ["maturin>=1.5,<2"]
+build-backend = "maturin"
+
+[project]
+name = "pyhearts"
+description = "Python bindings for the hearts-core game engine (PyO3)."
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.uv]
+# Rebuild the extension when the Rust sources change, not just this file.
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "Cargo.toml" },
+    { file = "src/**/*.rs" },
+    { file = "../hearts-core/src/**/*.rs" },
+]
+
+[tool.maturin]
+# The compiled module is named `pyhearts` (see [lib] name in Cargo.toml).
+module-name = "pyhearts"
+# maturin auto-detects `<module-name>.pyi` and `py.typed` at the crate root
+# and installs them inside the package (the stub as __init__.pyi) — no
+# `include` needed. An explicit `include` entry instead lands at the wheel
+# root, not inside the package.
+features = ["pyo3/extension-module"]

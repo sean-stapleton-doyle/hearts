@@ -1,0 +1,68 @@
+# Production stack: Postgres (internal-only), the hearts-server API, and
+# Caddy (reverse proxy + automatic TLS, and the static web build). Separate
+# from the repo root's compose.yaml, which is the throwaway dev database
+# only — this is what actually runs on the VPS.
+#
+# hearts-server is pulled from GHCR (built + pushed by
+# .github/workflows/build-and-push.yml), not built here — deploy.sh is the
+# normal way to ship this: it builds the web app, rsyncs this directory
+# plus the web build to the VPS, and runs `docker compose pull && up -d`
+# over ssh. See README.md for the full walkthrough and manual-deploy steps.
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: hearts-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hearts
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set a real password in .env}
+      POSTGRES_DB: hearts
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hearts -d hearts"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # No `ports:` — reachable only from other containers on this compose
+    # network. Never expose Postgres directly to the internet.
+
+  hearts-server:
+    image: ${HEARTS_IMAGE:?set to ghcr.io/<you>/hearts-server:latest in .env}
+    pull_policy: always
+    container_name: hearts-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://hearts:${POSTGRES_PASSWORD:?set a real password in .env}@postgres:5432/hearts
+      BIND_ADDR: 0.0.0.0:8080
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?set to https://your-domain in .env}
+      TURN_TIMEOUT_SECS: ${TURN_TIMEOUT_SECS:-300}
+      LOBBY_EXPIRY_SECS: ${LOBBY_EXPIRY_SECS:-1200}
+    # No `ports:` — only Caddy (over the compose network, as
+    # `hearts-server:8080`) reaches it; never published to the host.
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: hearts-caddy
+    restart: unless-stopped
+    depends_on:
+      - hearts-server
+    environment:
+      DOMAIN: ${DOMAIN:?set your domain (e.g. example.com) in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../web/dist:/srv/web:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:

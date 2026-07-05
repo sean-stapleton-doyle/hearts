@@ -2,6 +2,8 @@ target/
 node_modules/
 /graphify-out
 .env
+/logs/
+crates/hearts-server/logs/
 
 # Python (hearts-py bindings)
 .venv/

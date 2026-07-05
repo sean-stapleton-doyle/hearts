@@ -1,0 +1,15 @@
+[package]
+name = "hearts-py"
+version.workspace = true
+edition.workspace = true
+description = "PyO3 bindings for hearts-core: drive the game engine from Python."
+
+[lib]
+name = "pyhearts"
+# cdylib for the Python extension module. No rlib: the crate has no unit tests.
+crate-type = ["cdylib"]
+
+[dependencies]
+hearts-core = { workspace = true, features = ["serde"] }
+serde_json = { workspace = true }
+pyo3 = { version = "0.29", features = ["extension-module", "abi3-py39"] }

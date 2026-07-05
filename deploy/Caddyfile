@@ -1,0 +1,24 @@
+{$DOMAIN} {
+	encode gzip
+
+	# Everything under /api/* goes to the Rust server, prefix stripped (so
+	# hearts-server's own routes stay unprefixed — no server-side change
+	# needed). `flush_interval -1` disables response buffering, which
+	# matters for the SSE event stream (/api/games/{id}/events) staying
+	# live instead of arriving in delayed chunks.
+	handle_path /api/* {
+		reverse_proxy hearts-server:8080 {
+			flush_interval -1
+		}
+	}
+
+	# Everything else is the built SPA. `try_files` falls back to
+	# index.html for any path that isn't a real static asset, so
+	# TanStack Router's client-side routes (e.g. a refresh on /games/xyz)
+	# resolve correctly instead of 404ing.
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+	}
+}
