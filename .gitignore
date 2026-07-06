@@ -2,8 +2,16 @@ target/
 node_modules/
 /graphify-out
 .env
-/logs/
-crates/hearts-server/logs/
+# `hearts-server` writes rolling daily logs to `logs/` in its CWD
+# (tracing_appender::rolling::daily). Match anywhere so logs never slip in
+# regardless of which directory the server is launched from.
+logs/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# OS
+.DS_Store
 
 # Python (hearts-py bindings)
 .venv/
