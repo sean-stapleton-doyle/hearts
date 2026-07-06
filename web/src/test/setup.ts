@@ -25,6 +25,26 @@ if (!globalThis.localStorage) {
   })
 }
 
+// jsdom has no matchMedia, but GSAP's ScrollTrigger calls it at plugin
+// registration time (import of lib/scroll-anim.ts), before any test can
+// mock anything. A minimal always-false stub keeps that import inert —
+// tests exercise the reduced-motion/static path explicitly instead.
+if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  })
+}
+
 // Reset storage + any spied globals between every test.
 afterEach(() => {
   globalThis.localStorage.clear()
