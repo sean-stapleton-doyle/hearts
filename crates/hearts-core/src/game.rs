@@ -13,7 +13,7 @@
 use crate::card::Card;
 use crate::deck::Deck;
 use crate::error::GameError;
-use crate::round::{MAX_PLAYERS, MIN_PLAYERS, NUM_ROUNDS, Round, cards_for_round, next_dealer};
+use crate::round::{MAX_PLAYERS, MIN_PLAYERS, NUM_ROUNDS, Round, cards_for_round};
 use crate::seat::Seat;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -198,8 +198,8 @@ impl Game {
         );
     }
 
-    /// Round resolution (spec §5.5): apply deltas, record the result, hand
-    /// the deal to the round's top scorer, return the played cards to the
+    /// Round resolution (spec §5.5): apply deltas, record the result, pass
+    /// the deal clockwise to the next seat, return the played cards to the
     /// bottom of the deck (trick by trick, in play order), and deal the
     /// next round — or end the game after round 13.
     fn finish_round(&mut self) -> Vec<i32> {
@@ -223,7 +223,7 @@ impl Game {
             }
         }
         if self.round_index < NUM_ROUNDS {
-            self.dealer = next_dealer(self.dealer, &deltas);
+            self.dealer = self.dealer.next(self.num_players);
             self.round_index += 1;
             self.deal();
         }
@@ -260,5 +260,28 @@ mod tests {
         assert_eq!(round.hand(Seat(1))[0], fresh.deal().unwrap());
         assert_eq!(round.hand(Seat(2))[0], fresh.deal().unwrap());
         assert_eq!(round.hand(Seat(0))[0], fresh.deal().unwrap());
+    }
+
+    #[test]
+    fn deal_passes_clockwise_regardless_of_scores() {
+        let mut game = Game::new(3, 7).unwrap();
+        for expected_next in [Seat(1), Seat(2), Seat(0), Seat(1)] {
+            let dealer_before = game.dealer();
+            while let Some(seat) = game.round().unwrap().next_bidder() {
+                let bid = game.round().unwrap().legal_bids()[0];
+                game.place_bid(seat, bid).unwrap();
+            }
+            loop {
+                let seat = game.round().unwrap().next_player().unwrap();
+                let card = game.round().unwrap().legal_plays(seat)[0];
+                match game.play_card(seat, card).unwrap() {
+                    PlayOutcome::RoundComplete { .. } => break,
+                    PlayOutcome::GameOver { .. } => return,
+                    _ => {}
+                }
+            }
+            assert_eq!(game.dealer(), expected_next);
+            assert_eq!(game.dealer(), dealer_before.next(3));
+        }
     }
 }

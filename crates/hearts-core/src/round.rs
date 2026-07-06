@@ -35,21 +35,6 @@ pub fn score_delta(bid: u8, tricks: u8) -> i32 {
     if bid == tricks { tricks as i32 + 1 } else { -(bid as i32 - tricks as i32).abs() }
 }
 
-/// Next round's dealer (spec §5.5): the player with the highest round
-/// delta; ties go to the first tied seat in rotation starting from the
-/// current dealer's left.
-pub fn next_dealer(current_dealer: Seat, deltas: &[i32]) -> Seat {
-    let n = deltas.len();
-    let mut best = current_dealer.next(n);
-    for by in 2..=n {
-        let seat = current_dealer.offset(by, n);
-        if deltas[seat.0] > deltas[best.0] {
-            best = seat;
-        }
-    }
-    best
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Round {
@@ -309,16 +294,6 @@ mod tests {
         assert_eq!(score_delta(2, 3), -1);
         assert_eq!(score_delta(0, 4), -4);
         assert_eq!(score_delta(5, 5), 6);
-    }
-
-    #[test]
-    fn next_dealer_takes_highest_delta_ties_from_dealers_left() {
-        assert_eq!(next_dealer(Seat(0), &[3, -1, 2, -1]), Seat(0));
-        // Tie between seats 0 and 1 with dealer 1: order is 2, 3, 0, 1 → 0.
-        assert_eq!(next_dealer(Seat(1), &[3, 3, 2, 1]), Seat(0));
-        // Dealer loses ties to everyone: with all-equal deltas the seat at
-        // the dealer's left deals next.
-        assert_eq!(next_dealer(Seat(2), &[1, 1, 1, 1]), Seat(3));
     }
 
     #[test]

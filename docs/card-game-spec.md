@@ -155,9 +155,10 @@ else:       delta = -abs(b - t)  # missed: lose the gap, in either direction
 ### 5.5 Round resolution
 
 1. Add each player's `delta` to their cumulative score.
-2. **Next dealer** = the player with the **most points scored in this round** (highest `delta`).
-   - **[DECISION] Tie-break:** if multiple players tie for the highest round delta, default to the
-     tied player who comes first in seat order starting from the current dealer's left. Confirm.
+2. **Next dealer** = the seat at the current dealer's left — the deal simply passes clockwise
+   around the table each round, regardless of scores.
+   - *(Confirmed by the inventor 2026-07-06; an earlier draft gave the deal to the round's top
+     scorer with a seat-order tie-break — that rule is dead.)*
 3. Return all played cards to the bottom of the deck per §4.2.
 4. Advance to the next round, or end the game after round 13.
 
@@ -297,7 +298,7 @@ Reject (don't trust the client on) any action that violates these:
    - B: bid 1, won 1 → **+2**
    - C: bid 1, won 1 → **+2**
    - D: bid 2, won 1 → **−1**
-5. **Resolve:** A has the highest round delta (+3) → **A deals next round (round 6, 6 cards)**.
+5. **Resolve:** the deal passes clockwise → **B deals next round (round 6, 6 cards)**.
    Collect the round's cards to the deck bottom (§4.2) and continue.
 
 ---
@@ -310,7 +311,7 @@ Reject (don't trust the client on) any action that violates these:
 | 2 | Card-collection order returned to deck | trick order, then play order within trick | 4.2 |
 | 3 | First dealer of the game | random | 4.3 |
 | 4 | Can hearts be led before being "broken"? | yes, no restriction | 5.3 |
-| 5 | Tie-break for next dealer (round delta tie) | first in seat order from dealer's left | 5.5 |
+| 5 | Next dealer | passes clockwise (dealer's left), scores irrelevant — confirmed | 5.5 |
 | 6 | Tie-break for overall winner | unspecified | 6 |
 
 Lock these down and the rules above are complete and deterministic — ready to implement.

@@ -21,8 +21,8 @@
 //! - **§4.3 First dealer:** seat 0 by default; configurable via
 //!   [`Game::with_first_dealer`].
 //! - **§5.3 Leading hearts:** permitted at any time (no "breaking" rule).
-//! - **§5.5 Next-dealer tie-break:** first tied seat in rotation starting
-//!   from the current dealer's left ([`round::next_dealer`]).
+//! - **§5.5 Next dealer:** the deal passes clockwise to the seat at the
+//!   current dealer's left ([`Seat::next`]).
 //! - **§6 Overall winner tie-break:** unresolved by the engine;
 //!   [`Game::winners`] reports every tied seat.
 
