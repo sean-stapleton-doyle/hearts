@@ -20,7 +20,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::{Stream, StreamExt};
 use uuid::Uuid;
 
-use hearts_core::{Card, Game, PlayOutcome, Seat};
+use hearts_core::{Card, Game, PlayOutcome, Seat, Trick};
 
 use crate::error::ApiError;
 use crate::lobby::GameStatus;
@@ -505,12 +505,15 @@ pub fn engine_view(active: &ActiveGame, viewer: Option<usize>) -> serde_json::Va
             "tricks_won": (0..game.num_players())
                 .map(|seat| round.tricks_won(Seat(seat)))
                 .collect::<Vec<_>>(),
-            "current_trick": round.current_trick().map(|trick| json!({
-                "leader": trick.leader().0,
-                "plays": trick.plays().iter()
-                    .map(|&(seat, card)| json!({ "seat": seat.0, "card": card }))
-                    .collect::<Vec<_>>(),
-            })),
+            "current_trick": round.current_trick().map(trick_json),
+            "last_trick": round.tricks().iter().rev()
+                .find(|trick| trick.is_complete())
+                .map(|trick| {
+                    let mut value = trick_json(trick);
+                    value["winner"] =
+                        json!(trick.winner().expect("complete trick has a winner").0);
+                    value
+                }),
         })
     });
     let you = viewer.zip(round).map(|(seat, round)| {
@@ -537,6 +540,15 @@ pub fn engine_view(active: &ActiveGame, viewer: Option<usize>) -> serde_json::Va
         "pending_recap": pending_recap_json(active),
         "round": round_json,
         "you": you,
+    })
+}
+
+fn trick_json(trick: &Trick) -> serde_json::Value {
+    json!({
+        "leader": trick.leader().0,
+        "plays": trick.plays().iter()
+            .map(|&(seat, card)| json!({ "seat": seat.0, "card": card }))
+            .collect::<Vec<_>>(),
     })
 }
 
@@ -656,6 +668,57 @@ mod tests {
         let keys: Vec<&str> =
             view.as_object().unwrap().keys().map(|k| k.as_str()).collect();
         assert!(keys.contains(&"pending_ack"));
+    }
+
+    /// Drive every pending bid with the first legal bid.
+    fn drive_bids(game: &mut Game) {
+        while let Some(seat) = game.round().unwrap().next_bidder() {
+            let bid = game.round().unwrap().legal_bids()[0];
+            game.place_bid(seat, bid).unwrap();
+        }
+    }
+
+    /// Play first-legal cards until a trick (or the round) completes.
+    fn drive_one_trick(game: &mut Game) -> PlayOutcome {
+        loop {
+            let seat = game.round().unwrap().next_player().unwrap();
+            let card = game.round().unwrap().legal_plays(seat)[0];
+            match game.play_card(seat, card).unwrap() {
+                PlayOutcome::TrickContinues => continue,
+                outcome => return outcome,
+            }
+        }
+    }
+
+    #[test]
+    fn last_trick_appears_after_trick_completes() {
+        let mut active = fake_active(0);
+
+        // During bidding no trick exists yet.
+        let view = engine_view(&active, Some(0));
+        assert_eq!(view["round"]["last_trick"], serde_json::Value::Null);
+
+        // Round 1 deals a single card, so finish it to reach round 2
+        // (two cards each) where a completed trick sits mid-round.
+        drive_bids(&mut active.game);
+        assert!(matches!(drive_one_trick(&mut active.game), PlayOutcome::RoundComplete { .. }));
+
+        // A fresh round starts with no trick history.
+        let view = engine_view(&active, Some(0));
+        assert_eq!(view["round"]["last_trick"], serde_json::Value::Null);
+
+        drive_bids(&mut active.game);
+        assert!(matches!(
+            drive_one_trick(&mut active.game),
+            PlayOutcome::TrickComplete { .. }
+        ));
+
+        let view = engine_view(&active, Some(0));
+        let last = &view["round"]["last_trick"];
+        assert_eq!(last["plays"].as_array().unwrap().len(), 2);
+        assert!(last["winner"].is_number());
+        // The next trick is empty but the completed one stays visible.
+        assert_eq!(view["round"]["current_trick"]["plays"].as_array().unwrap().len(), 0);
     }
 
     #[test]

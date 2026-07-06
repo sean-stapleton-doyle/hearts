@@ -160,6 +160,12 @@ of truth for rendering; refetch it whenever you're unsure.
       "current_trick": {         // null during bidding; plays [] before the lead
         "leader": 0,
         "plays": [ { "seat": 0, "card": { "suit": "Spades", "rank": "Ten" } } ]
+      },
+      "last_trick": {            // most recently completed trick this round, or null
+        "leader": 1,
+        "winner": 0,
+        "plays": [ { "seat": 1, "card": { "suit": "Clubs", "rank": "Two" } },
+                   { "seat": 0, "card": { "suit": "Clubs", "rank": "King" } } ]
       }
     },
     "you": {                     // PRIVATE — only in your own view
@@ -178,6 +184,10 @@ Notes:
   exactly when you may act, already filtered for the hook and follow-suit.
   Both are `null` while `pending_ack` is set — the gate holds even the
   player whose turn it nominally is.
+- `last_trick` keeps the showdown visible: while `current_trick.plays` is
+  empty and `last_trick` is non-null, clients should keep rendering
+  `last_trick` (winner highlighted) until the next lead is played. It resets
+  to `null` at the start of each round.
 - `pending_ack` is non-null between a non-final `round_completed` and the
   following `round_acknowledged`. Render the recap; the host's
   `POST .../continue` clears it.

@@ -8,6 +8,7 @@ import { seatLayout, type SeatLayoutMode } from '../lib/seatLayout'
 import { useGameEvents } from '../lib/sse'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { ActionDock } from './ActionDock'
+import { LastTrickPanel } from './LastTrickPanel'
 import { RoundSummary } from './RoundSummary'
 import { Scoreboard } from './Scoreboard'
 import { TableMenu } from './TableMenu'
@@ -251,6 +252,10 @@ export function GameTable({ view }: { view: GameView }) {
             </div>
           ) : (
             <TrickArea view={view} nameBySeat={nameBySeat} />
+          )}
+
+          {!gateOpen && !needsDeal && engine.phase === 'Playing' && (
+            <LastTrickPanel trick={round?.last_trick ?? null} nameBySeat={nameBySeat} />
           )}
         </section>
 

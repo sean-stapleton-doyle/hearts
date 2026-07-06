@@ -52,12 +52,21 @@ export interface TrickView {
   plays: PlayView[]
 }
 
+/** A completed trick — all seats have played, so the winner is known. */
+export interface CompletedTrickView extends TrickView {
+  winner: number
+}
+
 export interface RoundView {
   cards_dealt: number
   dealer: number
   bids: (number | null)[]
   tricks_won: number[]
   current_trick: TrickView | null
+  /** The most recently completed trick this round, or null before the
+   *  first trick resolves (and at the start of every round). Shown while
+   *  `current_trick` is still empty so the showdown stays visible. */
+  last_trick: CompletedTrickView | null
 }
 
 export interface YouView {

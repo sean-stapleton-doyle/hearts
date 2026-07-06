@@ -49,6 +49,7 @@ const myTurnView = {
         leader: 0,
         plays: [{ seat: 0, card: { suit: 'Spades', rank: 'Ten' } }],
       },
+      last_trick: null,
     },
     you: {
       seat: 1,
@@ -77,6 +78,7 @@ const freshRoundView = {
       bids: [null, null],
       tricks_won: [0, 0],
       current_trick: null,
+      last_trick: null,
     },
     you: {
       seat: 1,
@@ -143,6 +145,25 @@ const heldGateGuestView = (() => {
     { seat: 0, display_name: 'alice', is_you: false, is_creator: true },
     { seat: 1, display_name: 'bob', is_you: true, is_creator: false },
   ]
+  return v
+})()
+
+// Between tricks: the previous trick just resolved, nobody has led yet.
+const lingerView = (() => {
+  const v = structuredClone(myTurnView) as GameView & {
+    game: NonNullable<GameView['game']>
+  }
+  v.id = 'g-linger'
+  v.game.round!.current_trick = { leader: 1, plays: [] }
+  v.game.round!.last_trick = {
+    leader: 0,
+    winner: 1,
+    plays: [
+      { seat: 0, card: { suit: 'Spades', rank: 'Ten' } },
+      { seat: 1, card: { suit: 'Spades', rank: 'King' } },
+    ],
+  }
+  v.game.round!.tricks_won = [0, 1]
   return v
 })()
 
@@ -244,6 +265,27 @@ describe('GameTable', () => {
     await vi.waitFor(() => {
       expect(api.continueGame).toHaveBeenCalledWith('g-gate')
     })
+  })
+
+  it('lingers the completed trick until the next lead', () => {
+    renderWithClient(<GameTable view={lingerView} />)
+
+    // The showdown stays on the felt: both cards plus the winner caption.
+    expect(screen.getByRole('button', { name: 'Ten of Spades' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'King of Spades' })).toBeTruthy()
+    expect(screen.getByText('bob takes the trick')).toBeTruthy()
+    expect(screen.queryByText('waiting for the lead…')).toBeNull()
+
+    // The corner reference panel carries the same trick.
+    expect(screen.getByText('Last trick')).toBeTruthy()
+    expect(screen.getByText('bob took it')).toBeTruthy()
+  })
+
+  it('shows no winner caption while a trick is in progress', () => {
+    // myTurnView: one card played, trick still open, no last_trick yet.
+    renderWithClient(<GameTable view={myTurnView} />)
+    expect(screen.queryByText(/takes the trick/)).toBeNull()
+    expect(screen.queryByText('Last trick')).toBeNull()
   })
 
   it('tells non-hosts to wait for the host at the round gate', () => {
