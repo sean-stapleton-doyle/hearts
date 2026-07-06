@@ -25,9 +25,11 @@ import {
   MyGamesSchema,
   MyStatsSchema,
   SessionInfoSchema,
+  EventsTicketSchema,
   type AccountInfo,
   type ActionAck,
   type Card,
+  type EventsTicket,
   type GameView,
   type MeInfo,
   type MyGames,
@@ -205,6 +207,12 @@ export const api = {
    *  `not_creator` for non-hosts. */
   endGame(id: string): Promise<ActionAck> {
     return authedRequest('POST', `/games/${id}/end`, ActionAckSchema)
+  },
+
+  /** A single-use, short-lived ticket for opening the game's SSE stream —
+   *  the stream URL carries this instead of the session token. */
+  createEventsTicket(id: string): Promise<EventsTicket> {
+    return authedRequest('POST', `/games/${id}/events-ticket`, EventsTicketSchema)
   },
 
   // ── Accounts (optional; login binds the current token, no new token) ──

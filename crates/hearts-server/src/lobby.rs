@@ -316,7 +316,7 @@ async fn game_view(
     if let Some(entry) = state.registry.get(game_id).await {
         let active = entry.lock().await;
         let viewer = active.seat_of(session.token_hash.as_slice());
-        engine = Some(crate::gameplay::engine_view(&active, viewer));
+        engine = Some(crate::gameplay::engine_view(&active, viewer, state.turn_timeout));
     }
 
     let players: Vec<_> = players

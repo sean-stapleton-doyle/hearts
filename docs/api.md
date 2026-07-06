@@ -25,9 +25,11 @@ Get one from `POST /session`. The token is shown **once**; the server
 stores only its hash. Missing/bad tokens yield `401` with code
 `missing_token`, `malformed_token`, or `invalid_token`.
 
-One endpoint — `GET /games/{id}/events` (SSE) — also accepts the token as a
-`?token=<hex>` query parameter, because browsers cannot set headers on
-`EventSource`. Everywhere else the bearer header is required.
+One endpoint — `GET /games/{id}/events` (SSE) — also accepts a **one-time
+stream ticket** as `?ticket=<hex>` (from `POST /games/{id}/events-ticket`),
+because browsers cannot set headers on `EventSource` and the long-lived
+session token must never ride in a URL (URLs land in access logs and
+browser history). Everywhere else the bearer header is required.
 
 ### CORS
 
@@ -42,7 +44,7 @@ server applies a CORS layer:
   `Last-Event-ID` (sent automatically by `EventSource` on reconnect).
 
 No credentials/cookies are used — the bearer token rides a request header
-(or the `?token=` query param on `/events`), so `allow-credentials` is off.
+(or a one-time `?ticket=` on `/events`), so `allow-credentials` is off.
 
 ### Errors
 
@@ -151,6 +153,7 @@ of truth for rendering; refetch it whenever you're unsure.
     "next": { "action": "play", "seat": 1 },
     "away": [false, true],       // seats currently on server auto-play
     "turn_deadline_in_secs": 287,
+    "turn_timeout_secs": 300,    // the full turn budget the deadline counts down from
     "pending_ack": null,         // completed round index held on the recap gate, or null
     "round": {
       "cards_dealt": 3,
@@ -252,14 +255,38 @@ a stale state (e.g. the turn timer already auto-acted for someone).
 
 ## Events (SSE)
 
+### `POST /games/{game_id}/events-ticket`
+
+Mint a **single-use, short-lived ticket** for opening this game's event
+stream. Normal bearer auth; members only, with exactly the availability
+checks of the stream itself (409 `not_started` / `game_over`, 404 for
+non-members). Response (`201`):
+
+```json
+{ "ticket": "9f2ab4…", "expires_in_secs": 30 }
+```
+
+The ticket is bound to this game, dies at first use or after 30 seconds
+(whichever comes first), and is worthless if it leaks into a log. Tickets
+live in server memory only — a restart invalidates outstanding ones, so
+clients should fetch a fresh ticket on every (re)connect.
+
 ### `GET /games/{game_id}/events`
 
 `text/event-stream` of the game's event log, members only, available while
 the game is `in_progress` (409 `not_started` / `game_over` otherwise).
-Browsers can't set headers on `EventSource`, so this endpoint authenticates
-either via the bearer header **or** a `?token=<hex>` query parameter, e.g.
-`GET /games/{id}/events?token=8e97cb02…`. Each SSE message carries
-`id: <seq>` and a JSON `data:` payload:
+Authenticates via the bearer header **or** a one-time `?ticket=<hex>`
+query parameter (browsers can't set headers on `EventSource`), e.g.
+`GET /games/{id}/events?ticket=9f2ab4…`. A ticket that is unknown, spent,
+expired, or issued for a different game yields 401 `invalid_ticket`.
+
+> **Note for browser clients**: a spent ticket also breaks `EventSource`'s
+> built-in auto-reconnect (the retried URL 401s), so own the reconnect
+> loop yourself — fetch a fresh ticket, reopen, and replay from the start
+> of the log (or track `Last-Event-ID` and send it on a manual `fetch`
+> based client).
+
+Each SSE message carries `id: <seq>` and a JSON `data:` payload:
 
 ```
 id: 3
@@ -376,7 +403,9 @@ the deck order and every hand, they are **participants-only** and return
 2. Create or join via invite code
 3. While status == "lobby": poll GET /games/{id} (~2s) to show arrivals
    (creator: POST .../start when ready)
-4. Open GET /games/{id}/events; fetch GET /games/{id} once for full state
+4. POST /games/{id}/events-ticket, open GET .../events?ticket=<hex>;
+   fetch GET /games/{id} once for full state (browsers: fetch a fresh
+   ticket on every reconnect — tickets are single-use)
 5. Render from the view; apply events as they arrive
    - your turn ⇔ view.game.you.legal_bids or legal_plays is non-null
      (equivalently: event.next.seat == your seat)

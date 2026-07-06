@@ -11,7 +11,7 @@
 use std::convert::Infallible;
 
 use axum::extract::{Path, State};
-use axum::http::HeaderMap;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::sse::{Event as SseEvent, KeepAlive, Sse};
 use axum::response::{IntoResponse, Json};
 use serde::{Deserialize, Serialize};
@@ -24,8 +24,9 @@ use hearts_core::{Card, Game, PlayOutcome, Seat, Trick};
 
 use crate::error::ApiError;
 use crate::lobby::GameStatus;
+use crate::ratelimit::ClientIp;
 use crate::registry::{ActiveGame, SeatBinding};
-use crate::session::{Session, SseSession};
+use crate::session::{SSE_TICKET_TTL, Session, SseSession};
 use crate::state::AppState;
 
 // ── Events ──────────────────────────────────────────────────────────────
@@ -470,17 +471,49 @@ async fn finish_game_row(state: &AppState, game_id: Uuid, scores: &[i32], winner
 
 // ── Event stream ────────────────────────────────────────────────────────
 
+/// `POST /games/{id}/events-ticket` — mint a short-lived, single-use
+/// ticket for opening this game's SSE stream. Browsers can't set headers
+/// on `EventSource`, so the stream authenticates via the URL; a ticket
+/// keeps the long-lived session token out of URLs (and therefore out of
+/// access logs and browser history). Members only — issuance runs exactly
+/// the checks opening the stream would.
+pub async fn events_ticket(
+    State(state): State<AppState>,
+    session: Session,
+    ClientIp(ip): ClientIp,
+    Path(game_id): Path<Uuid>,
+) -> Result<impl IntoResponse, ApiError> {
+    state.rate_limiter.check("events_ticket", ip, 30, std::time::Duration::from_secs(60))?;
+    let entry = active_entry(&state, game_id).await?;
+    let active = entry.lock().await;
+    seat_of_member(&active, &session)?;
+    drop(active);
+    let ticket = state.sse_tickets.issue(game_id, session);
+    Ok((
+        StatusCode::CREATED,
+        Json(json!({ "ticket": ticket, "expires_in_secs": SSE_TICKET_TTL.as_secs() })),
+    ))
+}
+
 /// `GET /games/{id}/events` — the game's event log as SSE, from
-/// `Last-Event-ID` (or the beginning) onward. Members only. Browsers can't
-/// set headers on `EventSource`, so this route authenticates via a
-/// `?token=` query param as well as the usual bearer header (see
-/// `SseSession`).
+/// `Last-Event-ID` (or the beginning) onward. Members only. Authenticates
+/// via the usual bearer header, or a `?ticket=` one-time stream ticket
+/// from `POST /games/{id}/events-ticket` (see `SseSession`).
 pub async fn events(
     State(state): State<AppState>,
-    SseSession(session): SseSession,
+    sse: SseSession,
     Path(game_id): Path<Uuid>,
     headers: HeaderMap,
 ) -> Result<Sse<impl Stream<Item = Result<SseEvent, Infallible>>>, ApiError> {
+    // A ticket is bound to the game it was issued for; presenting it on
+    // another game's stream is a bad ticket, not a membership question.
+    if sse.ticket_game.is_some_and(|issued_for| issued_for != game_id) {
+        return Err(ApiError::unauthorized(
+            "invalid_ticket",
+            "stream ticket was issued for a different game",
+        ));
+    }
+    let session = sse.session;
     let entry = active_entry(&state, game_id).await?;
     let active = entry.lock().await;
     seat_of_member(&active, &session)?;
@@ -509,7 +542,13 @@ pub async fn events(
 
 /// The engine-state section of `GET /games/{id}`: public state for
 /// everyone plus, for `viewer`, their hand and currently legal actions.
-pub fn engine_view(active: &ActiveGame, viewer: Option<usize>) -> serde_json::Value {
+/// `turn_timeout` is the server's full turn budget (`state.turn_timeout`),
+/// surfaced so clients can scale their countdown displays.
+pub fn engine_view(
+    active: &ActiveGame,
+    viewer: Option<usize>,
+    turn_timeout: std::time::Duration,
+) -> serde_json::Value {
     let game = &active.game;
     let round = game.round();
     let round_json = round.map(|round| {
@@ -544,6 +583,7 @@ pub fn engine_view(active: &ActiveGame, viewer: Option<usize>) -> serde_json::Va
             .turn_deadline
             .saturating_duration_since(tokio::time::Instant::now())
             .as_secs(),
+        "turn_timeout_secs": turn_timeout.as_secs(),
         "pending_ack": active.pending_ack,
         "pending_recap": pending_recap_json(active),
         "round": round_json,
@@ -710,7 +750,7 @@ mod tests {
     #[test]
     fn pending_ack_survives_in_engine_view() {
         let active = fake_active(0);
-        let view = engine_view(&active, Some(0));
+        let view = engine_view(&active, Some(0), Duration::from_secs(300));
         assert_eq!(view["pending_ack"], serde_json::Value::Null);
         // Same view shape as a normal round, just with the gate field present.
         let keys: Vec<&str> =
@@ -743,7 +783,7 @@ mod tests {
         let mut active = fake_active(0);
 
         // During bidding no trick exists yet.
-        let view = engine_view(&active, Some(0));
+        let view = engine_view(&active, Some(0), Duration::from_secs(300));
         assert_eq!(view["round"]["tricks"].as_array().unwrap().len(), 0);
 
         // Round 1 deals a single card, so finish it to reach round 2
@@ -752,7 +792,7 @@ mod tests {
         assert!(matches!(drive_one_trick(&mut active.game), PlayOutcome::RoundComplete { .. }));
 
         // A fresh round starts with no trick history.
-        let view = engine_view(&active, Some(0));
+        let view = engine_view(&active, Some(0), Duration::from_secs(300));
         assert_eq!(view["round"]["tricks"].as_array().unwrap().len(), 0);
 
         drive_bids(&mut active.game);
@@ -761,7 +801,7 @@ mod tests {
             PlayOutcome::TrickComplete { .. }
         ));
 
-        let view = engine_view(&active, Some(0));
+        let view = engine_view(&active, Some(0), Duration::from_secs(300));
         let tricks = view["round"]["tricks"].as_array().unwrap();
         assert_eq!(tricks.len(), 1);
         assert_eq!(tricks[0]["plays"].as_array().unwrap().len(), 2);
@@ -772,7 +812,7 @@ mod tests {
         // The second (final) trick of the round: completing it ends the
         // round, so the view's history resets with the fresh round.
         assert!(matches!(drive_one_trick(&mut active.game), PlayOutcome::RoundComplete { .. }));
-        let view = engine_view(&active, Some(0));
+        let view = engine_view(&active, Some(0), Duration::from_secs(300));
         assert_eq!(view["round"]["tricks"].as_array().unwrap().len(), 0);
     }
 

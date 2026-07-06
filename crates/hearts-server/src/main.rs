@@ -68,6 +68,7 @@ async fn main() -> anyhow::Result<()> {
         turn_timeout: config.turn_timeout,
         lobby_expiry: config.lobby_expiry,
         rate_limiter: ratelimit::RateLimiter::new(),
+        sse_tickets: Default::default(),
     };
     persist::recover_active_games(&state).await?;
     tokio::spawn(housekeeping::turn_timeouts(state.clone()));

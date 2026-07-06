@@ -38,6 +38,7 @@ pub fn router(state: AppState, cors_allowed_origins: &[String]) -> Router {
         .route("/games/{game}/continue", post(gameplay::continue_game))
         .route("/games/{game}/end", post(gameplay::end_game))
         .route("/games/{game}/events", get(gameplay::events))
+        .route("/games/{game}/events-ticket", post(gameplay::events_ticket))
         .route("/games/{game}/snapshots", get(account::game_snapshots))
         .route("/account/register", post(account::register))
         .route("/account/login", post(account::login))

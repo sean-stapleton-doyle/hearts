@@ -112,6 +112,9 @@ export const EngineViewSchema = z.object({
   next: TurnRefSchema.nullable(),
   away: z.array(z.boolean()),
   turn_deadline_in_secs: z.number(),
+  /** The server's full turn budget — the scale the deadline counts down
+   *  from (drives the countdown ring). */
+  turn_timeout_secs: z.number(),
   /** Non-null when the just-completed round is held open on the recap
    *  gate, awaiting host acknowledgement. Drives the round-end overlay
    *  (server-authoritative, so it survives reloads). */
@@ -234,6 +237,15 @@ export const CreatedSessionSchema = z.object({
   expires_at: z.string(),
 })
 export type CreatedSession = z.infer<typeof CreatedSessionSchema>
+
+/** A single-use ticket for opening the SSE stream (POST
+ *  /games/{id}/events-ticket) — EventSource can't set headers, and the
+ *  session token must never ride in a URL. */
+export const EventsTicketSchema = z.object({
+  ticket: z.string(),
+  expires_in_secs: z.number().int(),
+})
+export type EventsTicket = z.infer<typeof EventsTicketSchema>
 
 export const SessionInfoSchema = z.object({
   user_id: z.string().nullable(),

@@ -23,11 +23,6 @@ import type { GameView } from '../lib/types'
  *  the server gate is already up; we're just staging what it shows. */
 const FINAL_TRICK_LINGER_MS = 4000
 
-/** The full turn budget the countdown ring depletes from. Mirrors the
- *  server's TURN_TIMEOUT_SECS default until the view carries it
- *  (turn_timeout_secs, planned server field). */
-const DEFAULT_TURN_BUDGET_SECS = 300
-
 /**
  * The round-end beat: hold the felt on the final showdown for a moment
  * before the recap takes it. Keyed on the gate, not the recap object —
@@ -149,7 +144,7 @@ export function GameTable({ view }: { view: GameView }) {
       isActive: activeSeat === seat,
       isDealer: round?.dealer === seat,
       deadlineInSecs: engine.turn_deadline_in_secs,
-      deadlineTotalSecs: DEFAULT_TURN_BUDGET_SECS,
+      deadlineTotalSecs: engine.turn_timeout_secs,
     }
   }
 

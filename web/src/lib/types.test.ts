@@ -23,6 +23,7 @@ const documentedView = {
     next: { action: 'play', seat: 1 },
     away: [false, true],
     turn_deadline_in_secs: 287,
+    turn_timeout_secs: 300,
     pending_ack: null,
     pending_recap: null,
     round: {
