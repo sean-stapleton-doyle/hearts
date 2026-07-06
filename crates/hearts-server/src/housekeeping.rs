@@ -30,6 +30,7 @@ pub async fn turn_timeouts(state: AppState) {
             // their behalf so the table isn't stuck; clients learn via the
             // event and the view's `pending_ack` clearing on refetch.
             if let Some(round) = active.pending_ack.take() {
+                active.pending_tricks = None;
                 let next = gameplay::turn(&active.game);
                 tracing::info!(%game_id, round, "round-gate timed out; auto-acknowledging");
                 active.turn_deadline = tokio::time::Instant::now() + state.turn_timeout;

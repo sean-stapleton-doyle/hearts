@@ -297,6 +297,7 @@ pub async fn continue_game(
             "no round is currently pending acknowledgement",
         ));
     };
+    active.pending_tricks = None;
     // The next round's turn clock starts now: reset the deadline so the
     // first bidder/plays has their full window.
     active.turn_deadline = tokio::time::Instant::now() + state.turn_timeout;
@@ -367,6 +368,18 @@ pub async fn apply_play(
     card: Card,
     auto: bool,
 ) -> Result<AppliedPlay, hearts_core::GameError> {
+    // Snapshot the round's tricks before the play: if this card completes
+    // the round, the engine drops them as it advances, and the recap gate
+    // needs them to show what was played.
+    let prior_tricks = active.game.round().map(|round| {
+        let completed = completed_tricks_json(round);
+        let open = round
+            .current_trick()
+            .filter(|trick| !trick.is_complete())
+            .map(|trick| (trick.leader().0, trick.plays().to_vec()));
+        (completed, open)
+    });
+
     let outcome = active.game.play_card(Seat(seat), card)?;
     active.note_action(seat, auto, state.turn_timeout);
     let next = turn(&active.game);
@@ -395,6 +408,8 @@ pub async fn apply_play(
                 .map(|record| record.index)
                 .expect("a round just completed");
             active.pending_ack = Some(completed);
+            active.pending_tricks =
+                prior_tricks.map(|prior| finished_round_tricks(prior, seat, card, trick_winner));
             active.turn_deadline = tokio::time::Instant::now() + state.turn_timeout;
             crate::persist::write_snapshot(&state.pool, game_id, &active.game).await;
         }
@@ -506,14 +521,7 @@ pub fn engine_view(active: &ActiveGame, viewer: Option<usize>) -> serde_json::Va
                 .map(|seat| round.tricks_won(Seat(seat)))
                 .collect::<Vec<_>>(),
             "current_trick": round.current_trick().map(trick_json),
-            "last_trick": round.tricks().iter().rev()
-                .find(|trick| trick.is_complete())
-                .map(|trick| {
-                    let mut value = trick_json(trick);
-                    value["winner"] =
-                        json!(trick.winner().expect("complete trick has a winner").0);
-                    value
-                }),
+            "tricks": completed_tricks_json(round),
         })
     });
     let you = viewer.zip(round).map(|(seat, round)| {
@@ -552,6 +560,45 @@ fn trick_json(trick: &Trick) -> serde_json::Value {
     })
 }
 
+/// The full trick list of a just-finished round: the tricks that were
+/// already complete before the final play, plus the open trick closed out
+/// by `(seat, card)` and won by `winner`. Pure so it's testable without a
+/// database.
+fn finished_round_tricks(
+    (mut completed, open): (Vec<serde_json::Value>, Option<(usize, Vec<(Seat, Card)>)>),
+    seat: usize,
+    card: Card,
+    winner: Seat,
+) -> serde_json::Value {
+    if let Some((leader, mut plays)) = open {
+        plays.push((Seat(seat), card));
+        completed.push(json!({
+            "leader": leader,
+            "winner": winner.0,
+            "plays": plays.iter()
+                .map(|&(seat, card)| json!({ "seat": seat.0, "card": card }))
+                .collect::<Vec<_>>(),
+        }));
+    }
+    serde_json::Value::Array(completed)
+}
+
+/// Every completed trick of the round so far, in play order, each with its
+/// winner — the client's trick history (and the source of the between-trick
+/// showdown linger).
+fn completed_tricks_json(round: &hearts_core::Round) -> Vec<serde_json::Value> {
+    round
+        .tricks()
+        .iter()
+        .filter(|trick| trick.is_complete())
+        .map(|trick| {
+            let mut value = trick_json(trick);
+            value["winner"] = json!(trick.winner().expect("complete trick has a winner").0);
+            value
+        })
+        .collect()
+}
+
 /// The recap payload for a held-open round, so a fresh `GET /games/{id}`
 /// (or a mutation's refetch) carries everything the client needs to render
 /// the summary without waiting for the `round_completed` SSE event to
@@ -573,6 +620,7 @@ fn pending_recap_json(active: &ActiveGame) -> serde_json::Value {
         "scores": game.scores(),
         "next_round_index": game.round().map(|_| game.round_index()),
         "next_dealer": game.round().map(|_| game.dealer().0),
+        "tricks": active.pending_tricks.clone(),
     })
 }
 
@@ -691,12 +739,12 @@ mod tests {
     }
 
     #[test]
-    fn last_trick_appears_after_trick_completes() {
+    fn completed_tricks_accumulate_in_the_view() {
         let mut active = fake_active(0);
 
         // During bidding no trick exists yet.
         let view = engine_view(&active, Some(0));
-        assert_eq!(view["round"]["last_trick"], serde_json::Value::Null);
+        assert_eq!(view["round"]["tricks"].as_array().unwrap().len(), 0);
 
         // Round 1 deals a single card, so finish it to reach round 2
         // (two cards each) where a completed trick sits mid-round.
@@ -705,7 +753,7 @@ mod tests {
 
         // A fresh round starts with no trick history.
         let view = engine_view(&active, Some(0));
-        assert_eq!(view["round"]["last_trick"], serde_json::Value::Null);
+        assert_eq!(view["round"]["tricks"].as_array().unwrap().len(), 0);
 
         drive_bids(&mut active.game);
         assert!(matches!(
@@ -714,11 +762,40 @@ mod tests {
         ));
 
         let view = engine_view(&active, Some(0));
-        let last = &view["round"]["last_trick"];
-        assert_eq!(last["plays"].as_array().unwrap().len(), 2);
-        assert!(last["winner"].is_number());
+        let tricks = view["round"]["tricks"].as_array().unwrap();
+        assert_eq!(tricks.len(), 1);
+        assert_eq!(tricks[0]["plays"].as_array().unwrap().len(), 2);
+        assert!(tricks[0]["winner"].is_number());
         // The next trick is empty but the completed one stays visible.
         assert_eq!(view["round"]["current_trick"]["plays"].as_array().unwrap().len(), 0);
+
+        // The second (final) trick of the round: completing it ends the
+        // round, so the view's history resets with the fresh round.
+        assert!(matches!(drive_one_trick(&mut active.game), PlayOutcome::RoundComplete { .. }));
+        let view = engine_view(&active, Some(0));
+        assert_eq!(view["round"]["tricks"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn finished_round_tricks_closes_the_open_trick() {
+        use hearts_core::{Rank, Suit};
+        let ten = Card { suit: Suit::Spades, rank: Rank::Ten };
+        let king = Card { suit: Suit::Spades, rank: Rank::King };
+
+        let already_done = json!({ "leader": 0, "winner": 1, "plays": [] });
+        let open = Some((0usize, vec![(Seat(0), ten)]));
+        let value =
+            finished_round_tricks((vec![already_done.clone()], open), 1, king, Seat(1));
+
+        let tricks = value.as_array().unwrap();
+        assert_eq!(tricks.len(), 2);
+        assert_eq!(tricks[0], already_done);
+        assert_eq!(tricks[1]["leader"], 0);
+        assert_eq!(tricks[1]["winner"], 1);
+        let plays = tricks[1]["plays"].as_array().unwrap();
+        assert_eq!(plays.len(), 2);
+        assert_eq!(plays[1]["seat"], 1);
+        assert_eq!(plays[1]["card"]["rank"], "King");
     }
 
     #[test]

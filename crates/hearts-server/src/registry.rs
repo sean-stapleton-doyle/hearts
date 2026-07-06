@@ -52,6 +52,12 @@ pub struct ActiveGame {
     /// snapshots — a server restart clears it (consistent with the existing
     /// "in-flight round state is lost" tradeoff).
     pub pending_ack: Option<u8>,
+    /// The completed tricks of the round held on the gate, as view JSON
+    /// (`[{leader, winner, plays}, …]`). Captured at round completion —
+    /// the engine drops the round's tricks when it advances — and carried
+    /// by `pending_recap` so the recap can show what was played. Lives and
+    /// dies with [`pending_ack`](Self::pending_ack).
+    pub pending_tricks: Option<serde_json::Value>,
     events: Vec<Envelope>,
     sender: broadcast::Sender<Envelope>,
 }
@@ -78,6 +84,7 @@ impl ActiveGame {
             away,
             creator_seat,
             pending_ack: None,
+            pending_tricks: None,
             events: Vec::new(),
             sender,
         }

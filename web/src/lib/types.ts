@@ -63,10 +63,11 @@ export interface RoundView {
   bids: (number | null)[]
   tricks_won: number[]
   current_trick: TrickView | null
-  /** The most recently completed trick this round, or null before the
-   *  first trick resolves (and at the start of every round). Shown while
-   *  `current_trick` is still empty so the showdown stays visible. */
-  last_trick: CompletedTrickView | null
+  /** Every completed trick this round, in play order — empty at the start
+   *  of a round. The latest entry is shown while `current_trick` is still
+   *  empty so the showdown stays visible; the full list backs the tricks
+   *  history panel. */
+  tricks: CompletedTrickView[]
 }
 
 export interface YouView {
@@ -107,6 +108,10 @@ export interface PendingRecap {
   scores: number[]
   next_round_index: number | null
   next_dealer: number | null
+  /** The completed round's tricks, captured before the engine advanced —
+   *  the round itself is gone by the time the recap shows. Null only if
+   *  the server restarted while the gate was up. */
+  tricks: CompletedTrickView[] | null
 }
 
 export interface GameView {

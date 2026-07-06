@@ -32,14 +32,16 @@ describe('GameView decode (api.md §The game view)', () => {
             leader: 0,
             plays: [{ seat: 0, card: { suit: 'Spades', rank: 'Ten' } }],
           },
-          last_trick: {
-            leader: 1,
-            winner: 0,
-            plays: [
-              { seat: 1, card: { suit: 'Clubs', rank: 'Two' } },
-              { seat: 0, card: { suit: 'Clubs', rank: 'King' } },
-            ],
-          },
+          tricks: [
+            {
+              leader: 1,
+              winner: 0,
+              plays: [
+                { seat: 1, card: { suit: 'Clubs', rank: 'Two' } },
+                { seat: 0, card: { suit: 'Clubs', rank: 'King' } },
+              ],
+            },
+          ],
         },
         you: {
           seat: 1,
@@ -53,7 +55,7 @@ describe('GameView decode (api.md §The game view)', () => {
     expect(view.status).toBe('in_progress')
     expect(view.game?.round?.bids[1]).toBeNull()
     expect(view.game?.you?.legal_plays).toHaveLength(1)
-    expect(view.game?.round?.last_trick?.winner).toBe(0)
+    expect(view.game?.round?.tricks[0]?.winner).toBe(0)
     expect(view.game?.turn_deadline_in_secs).toBe(287)
   })
 })

@@ -33,7 +33,7 @@ export function TrickArea({ view, nameBySeat }: TrickAreaProps) {
   }
 
   const current = round?.current_trick ?? null
-  const last = round?.last_trick ?? null
+  const last = round?.tricks.at(-1) ?? null
   const lingering = (current == null || current.plays.length === 0) && last != null
   const trick = lingering ? last : current
   if (!trick || trick.plays.length === 0) {

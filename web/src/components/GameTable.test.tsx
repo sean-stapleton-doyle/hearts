@@ -49,7 +49,7 @@ const myTurnView = {
         leader: 0,
         plays: [{ seat: 0, card: { suit: 'Spades', rank: 'Ten' } }],
       },
-      last_trick: null,
+      tricks: [],
     },
     you: {
       seat: 1,
@@ -78,7 +78,7 @@ const freshRoundView = {
       bids: [null, null],
       tricks_won: [0, 0],
       current_trick: null,
-      last_trick: null,
+      tricks: [],
     },
     you: {
       seat: 1,
@@ -115,6 +115,16 @@ const pendingRecap: PendingRecap = {
   scores: roundSummary.scores,
   next_round_index: roundSummary.next_round_index,
   next_dealer: roundSummary.next_dealer,
+  tricks: [
+    {
+      leader: 0,
+      winner: 0,
+      plays: [
+        { seat: 0, card: { suit: 'Diamonds', rank: 'Queen' } },
+        { seat: 1, card: { suit: 'Diamonds', rank: 'Three' } },
+      ],
+    },
+  ],
 }
 
 // Round 1 just completed and is held open on the gate; the engine has
@@ -155,14 +165,16 @@ const lingerView = (() => {
   }
   v.id = 'g-linger'
   v.game.round!.current_trick = { leader: 1, plays: [] }
-  v.game.round!.last_trick = {
-    leader: 0,
-    winner: 1,
-    plays: [
-      { seat: 0, card: { suit: 'Spades', rank: 'Ten' } },
-      { seat: 1, card: { suit: 'Spades', rank: 'King' } },
-    ],
-  }
+  v.game.round!.tricks = [
+    {
+      leader: 0,
+      winner: 1,
+      plays: [
+        { seat: 0, card: { suit: 'Spades', rank: 'Ten' } },
+        { seat: 1, card: { suit: 'Spades', rank: 'King' } },
+      ],
+    },
+  ]
   v.game.round!.tricks_won = [0, 1]
   return v
 })()
@@ -259,6 +271,11 @@ describe('GameTable', () => {
     // Recap is embedded on the felt (aria-label, not a modal dialog role).
     expect(screen.getByLabelText('Round 1 complete')).toBeTruthy()
     expect(screen.getByText('You deal round 2')).toBeTruthy()
+
+    // The completed round's tricks show what was played.
+    const chips = screen.getAllByTestId('trick-chip')
+    expect(chips.map((c) => c.textContent)).toEqual(['Q♦', '3♦'])
+    expect(screen.getByText('alice took it')).toBeTruthy()
 
     // Host sees and clicks Continue; the mutation fires.
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
