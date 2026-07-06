@@ -33,10 +33,15 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {!inGame && <NavBar />}
       <Outlet />
-      <TanStackDevtools
-        config={{ position: 'bottom-right' }}
-        plugins={[{ name: 'TanStack Router', render: <TanStackRouterDevtoolsPanel /> }]}
-      />
+      {/* Dev-only: `import.meta.env.DEV` is statically false in production
+          builds, so the devtools JSX (and its imports) are tree-shaken out
+          of the bundle entirely. */}
+      {import.meta.env.DEV && (
+        <TanStackDevtools
+          config={{ position: 'bottom-right' }}
+          plugins={[{ name: 'TanStack Router', render: <TanStackRouterDevtoolsPanel /> }]}
+        />
+      )}
     </QueryClientProvider>
   )
 }

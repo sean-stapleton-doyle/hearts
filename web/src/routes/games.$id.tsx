@@ -7,6 +7,9 @@ import { FinishedView } from '../components/FinishedView'
 import { Lobby } from '../components/Lobby'
 import { gameKeys } from '../lib/query'
 
+/** How often the lobby polls for arrivals; SSE takes over once in-game. */
+const LOBBY_POLL_MS = 2000
+
 export const Route = createFileRoute('/games/$id')({
   // Prime the cache so the page can render immediately; the game route also
   // polls while in the lobby and is kept fresh by the SSE bridge mid-game.
@@ -33,7 +36,7 @@ function GamePage() {
     queryFn: () => api.getGame(id),
     // Lobby has no SSE (the server returns 409 `not_started`), so poll for
     // arrivals; stop the moment the game starts — the SSE bridge takes over.
-    refetchInterval: (query) => (query.state.data?.status === 'lobby' ? 2000 : false),
+    refetchInterval: (query) => (query.state.data?.status === 'lobby' ? LOBBY_POLL_MS : false),
   })
 
   if (!view) return null
