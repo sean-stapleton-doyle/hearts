@@ -2,10 +2,18 @@ import { useCountdown } from '../hooks/useCountdown'
 
 /** Cosmetic turn timer as a depleting ring + mm:ss readout. The server is the
  *  real enforcer; this just visualizes `turn_deadline_in_secs`. */
-export function Countdown({ deadlineInSecs, active }: { deadlineInSecs: number; active: boolean }) {
+export function Countdown({
+  deadlineInSecs,
+  totalInSecs,
+  active,
+}: {
+  deadlineInSecs: number
+  /** The full turn budget the ring depletes from (server-configured). */
+  totalInSecs: number
+  active: boolean
+}) {
   const secs = useCountdown(deadlineInSecs) ?? 0
-  const TOTAL = 300
-  const frac = Math.max(0, Math.min(1, secs / TOTAL))
+  const frac = Math.max(0, Math.min(1, secs / totalInSecs))
   const r = 12
   const circumference = 2 * Math.PI * r
   const offset = circumference * (1 - frac)

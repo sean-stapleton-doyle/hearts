@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
+import * as Popover from '@radix-ui/react-popover'
 
 import { api } from '../lib/api'
 import type { EngineView, PlayerInfo } from '../lib/types'
@@ -12,57 +13,44 @@ interface TableMenuProps {
 }
 
 /** The kebab beside the round/phase label: roster of who's at the table,
- *  plus — host only — ending the game early. A popover rather than the
- *  mobile scores sheet since it's table-scoped, not personal, and rare
- *  enough not to earn its own dedicated button. */
+ *  plus — host only — ending the game early. A Radix popover (dismissal,
+ *  Escape, and focus management for free) rather than the mobile scores
+ *  sheet since it's table-scoped, not personal, and rare enough not to
+ *  earn its own dedicated button. Kept controlled so the end-game
+ *  mutation can close it programmatically. */
 export function TableMenu({ gameId, players, away, isHost }: TableMenuProps) {
   const [open, setOpen] = useState(false)
   const [confirmingEnd, setConfirmingEnd] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function onPointerDown(e: PointerEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('pointerdown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
-    }
-  }, [open])
 
   // Collapse the confirm step whenever the menu closes, so reopening it
   // always starts from the plain "End game" button.
-  useEffect(() => {
-    if (!open) setConfirmingEnd(false)
-  }, [open])
+  function onOpenChange(next: boolean) {
+    setOpen(next)
+    if (!next) setConfirmingEnd(false)
+  }
 
   const endMutation = useMutation({
     mutationFn: () => api.endGame(gameId),
     // No local cache patch: the `game_abandoned` SSE event (and its
     // FinishedView result-cache write) does that for every client at once.
-    onSettled: () => setOpen(false),
+    onSettled: () => onOpenChange(false),
   })
 
   return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        className="ghost table__menu-toggle"
-        aria-label="Table menu"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-      >
-        ⋮
-      </button>
+    <Popover.Root open={open} onOpenChange={onOpenChange}>
+      <Popover.Trigger asChild>
+        <button type="button" className="ghost table__menu-toggle" aria-label="Table menu">
+          ⋮
+        </button>
+      </Popover.Trigger>
 
-      {open && (
-        <div className="table__menu-panel modal__panel" role="menu">
+      <Popover.Portal>
+        <Popover.Content
+          className="table__menu-panel modal__panel z-30"
+          align="start"
+          sideOffset={6}
+          collisionPadding={8}
+        >
           <h4 className="m-0 text-xs font-bold uppercase tracking-widest text-mute">
             Players
           </h4>
@@ -110,8 +98,8 @@ export function TableMenu({ gameId, players, away, isHost }: TableMenuProps) {
               )}
             </>
           )}
-        </div>
-      )}
-    </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   )
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { api, isApiError } from '../lib/api'
@@ -17,10 +17,26 @@ interface ActionDockProps {
   action: 'bid' | 'play' | null
   /** False while the deal gate hides the fresh hand. */
   showActions: boolean
+  /** Changes whenever the turn hands off (round/seat/action) — any stored
+   *  selection from another turn reads as empty (see `Selection`). */
+  turnKey: string
   /** Your own seat strip on small screens (carries `data-seat` for the
    *  deal animation, which needs an anchor for every seat). */
   seatSlot?: ReactNode
 }
+
+/** In-flight selection, tagged with the turn it belongs to. Rather than an
+ *  effect that clears state when the turn changes, stale selections are
+ *  simply never read: `current()` returns the empty selection whenever the
+ *  stored key isn't this turn's. (A `key`-remount would also reset state,
+ *  but unmounting the hand's `data-flip-id` nodes breaks GSAP Flip.) */
+interface Selection {
+  key: string
+  card: Card | null
+  bid: number | null
+  error: string | null
+}
+const emptySelection = (key: string): Selection => ({ key, card: null, bid: null, error: null })
 
 /** The strip beneath the felt where you act: your seat identity (small
  *  screens), a loud turn banner, the bid picker or fanned hand, and the
@@ -34,42 +50,39 @@ export function ActionDock({
   myTurn,
   action,
   showActions,
+  turnKey,
   seatSlot,
 }: ActionDockProps) {
   const queryClient = useQueryClient()
-  const [selectedCard, setSelectedCard] = useState<Card | null>(null)
-  const [selectedBid, setSelectedBid] = useState<number | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  // Clear any in-flight selection whenever the turn hands off.
-  useEffect(() => {
-    setSelectedCard(null)
-    setSelectedBid(null)
-    setError(null)
-  }, [myTurn, legalPlays, legalBids])
+  const [stored, setStored] = useState<Selection>(() => emptySelection(turnKey))
+  // A selection stored under another turn's key reads as empty — the reset
+  // happens by derivation, no effect needed.
+  const sel = stored.key === turnKey ? stored : emptySelection(turnKey)
+  const patchSel = (patch: Partial<Selection>) =>
+    setStored((prev) => ({ ...(prev.key === turnKey ? prev : emptySelection(turnKey)), ...patch }))
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: gameKeys.detail(id) })
   const playMutation = useMutation({
     mutationFn: (card: Card) => api.play(id, card),
     onSettled: invalidate,
-    onError: (e) => setError(isApiError(e) ? e.message : 'could not play'),
+    onError: (e) => patchSel({ error: isApiError(e) ? e.message : 'could not play' }),
   })
   const bidMutation = useMutation({
     mutationFn: (bid: number) => api.bid(id, bid),
     onSettled: invalidate,
-    onError: (e) => setError(isApiError(e) ? e.message : 'could not bid'),
+    onError: (e) => patchSel({ error: isApiError(e) ? e.message : 'could not bid' }),
   })
 
   const pending = playMutation.isPending || bidMutation.isPending
   function confirm() {
-    if (legalPlays != null && selectedCard) playMutation.mutate(selectedCard)
-    else if (legalBids != null && selectedBid != null) bidMutation.mutate(selectedBid)
+    if (legalPlays != null && sel.card) playMutation.mutate(sel.card)
+    else if (legalBids != null && sel.bid != null) bidMutation.mutate(sel.bid)
   }
 
   const legalIds = new Set((legalPlays ?? []).map(cardId))
   const sorted = sortHand(hand)
   const isPlay = legalPlays != null
-  const hasSelection = selectedCard != null || selectedBid != null
+  const hasSelection = sel.card != null || sel.bid != null
 
   return (
     <section className="flex flex-col items-center gap-2">
@@ -89,8 +102,8 @@ export function ActionDock({
                 <button
                   key={bid}
                   type="button"
-                  className={`chip ${selectedBid === bid ? 'is-selected' : ''}`}
-                  onClick={() => setSelectedBid(bid)}
+                  className={`chip ${sel.bid === bid ? 'is-selected' : ''}`}
+                  onClick={() => patchSel({ bid })}
                   disabled={pending}
                 >
                   {bid}
@@ -104,7 +117,7 @@ export function ActionDock({
               {sorted.map((card) => {
                 const cid = cardId(card)
                 const legal = isPlay && legalIds.has(cid)
-                const selected = selectedCard != null && cardId(selectedCard) === cid
+                const selected = sel.card != null && cardId(sel.card) === cid
                 return (
                   <PlayingCard
                     key={cid}
@@ -112,7 +125,7 @@ export function ActionDock({
                     interactive={isPlay}
                     legal={legal}
                     selected={selected}
-                    onClick={() => legal && setSelectedCard(card)}
+                    onClick={() => legal && patchSel({ card })}
                   />
                 )
               })}
@@ -129,7 +142,7 @@ export function ActionDock({
               {pending ? 'Sending…' : isPlay ? 'Play card' : 'Place bid'}
             </button>
           )}
-          {error && <p className="error">{error}</p>}
+          {sel.error && <p className="error">{sel.error}</p>}
         </>
       )}
     </section>

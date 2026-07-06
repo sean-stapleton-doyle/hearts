@@ -697,24 +697,18 @@
 .round-recap {
   box-shadow: var(--shadow-hard-lg);
 }
-/* Table-menu kebab + its popover: anchored under the button, above every
-   other table layer but below the round-end gate (z-20) which it can't
-   coexist with anyway — the gate takes the mutation focus at that point. */
+/* Table-menu kebab + its popover. Radix owns the panel's positioning
+   (anchoring, collision-flipping, dismissal); this class only styles the
+   surface. z-index rides on a Tailwind z-30 utility at the call site —
+   the panel is portaled to <body>, above the table layers. */
 .table__menu-toggle {
   padding: 0.4rem 0.55rem;
   font-size: 1.1rem;
   line-height: 1;
 }
 .table__menu-panel {
-  position: absolute;
-  left: 0;
-  top: calc(100% + 0.4rem);
-  z-index: 30;
   width: 15rem;
-  /* The toggle sits near the left edge of the header (right after the
-     round/phase label), not the right — anchoring from the right made the
-     panel grow leftward off the edge of narrow screens. Clamped so it also
-     can't overflow the *right* edge on the narrowest phones. */
+  /* Clamped so the panel can't overflow the narrowest phones. */
   max-width: calc(100vw - 2rem);
   padding: 0.85rem 1rem;
   gap: 0.6rem;
