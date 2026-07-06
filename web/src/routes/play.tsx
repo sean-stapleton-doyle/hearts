@@ -1,55 +1,13 @@
 import { useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 
-import { api, isApiError } from '../lib/api'
-import { gameKeys } from '../lib/query'
-import { getDisplayName, setDisplayName } from '../lib/session'
-import { joinErrorMessage, useDefaultDisplayName } from '../lib/useDefaultDisplayName'
-import type { GameView } from '../lib/types'
+import { useJoinFlow } from '../hooks/useJoinFlow'
 
 export const Route = createFileRoute('/play')({ component: PlayPage })
 
 function PlayPage() {
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const [name, setName] = useState(getDisplayName())
-  useDefaultDisplayName(setName)
+  const { name, setName, busy, error, create, join } = useJoinFlow()
   const [code, setCode] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-
-  // After create/join, prime the cache with the returned view so the game
-  // route renders without an extra GET, then navigate.
-  function enter(view: GameView) {
-    queryClient.setQueryData(gameKeys.detail(view.id), view)
-    setDisplayName(name.trim())
-    navigate({ to: '/games/$id', params: { id: view.id } })
-  }
-
-  async function onCreate() {
-    setError(null)
-    setBusy(true)
-    try {
-      enter(await api.createGame(name.trim() || 'player'))
-    } catch (e) {
-      setError(isApiError(e) ? e.message : 'could not create game')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function onJoin() {
-    setError(null)
-    setBusy(true)
-    try {
-      enter(await api.joinGame(code.trim(), name.trim() || 'player'))
-    } catch (e) {
-      setError(joinErrorMessage(e, 'could not join game'))
-    } finally {
-      setBusy(false)
-    }
-  }
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-5 px-5 py-10">
@@ -65,7 +23,7 @@ function PlayPage() {
         <p className="m-0 text-sm font-medium text-mute">
           You get an invite code to share with the other players.
         </p>
-        <button type="button" className="primary" onClick={onCreate} disabled={busy}>
+        <button type="button" className="primary" onClick={create} disabled={busy}>
           Create a new game
         </button>
       </section>
@@ -80,7 +38,7 @@ function PlayPage() {
             maxLength={6}
             placeholder="invite code"
           />
-          <button type="button" onClick={onJoin} disabled={busy || code.trim().length === 0}>
+          <button type="button" onClick={() => join(code)} disabled={busy || code.trim().length === 0}>
             Join
           </button>
         </div>

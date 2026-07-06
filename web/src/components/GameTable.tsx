@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { runDealAnimation, useFlipLayout } from '../lib/anim'
 import { gameKeys } from '../lib/query'
+import { seatNamer } from '../lib/players'
 import { seatLayout, type SeatLayoutMode } from '../lib/seatLayout'
 import { useGameEvents } from '../lib/sse'
 import { useMediaQuery } from '../hooks/useMediaQuery'
@@ -175,8 +176,7 @@ export function GameTable({ view }: { view: GameView }) {
   const legalBids = you?.legal_bids ?? null
   const legalPlays = you?.legal_plays ?? null
   const myTurn = legalBids != null || legalPlays != null
-  const nameBySeat = (seat: number) =>
-    view.players.find((p) => p.seat === seat)?.display_name ?? `seat ${seat}`
+  const nameBySeat = seatNamer(view.players)
   const activeSeat = engine.next?.seat
 
   // Crowded phone tables get the tighter seat treatment.

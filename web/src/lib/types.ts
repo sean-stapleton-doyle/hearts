@@ -220,6 +220,15 @@ export const RoundCompletedEnvelopeSchema = RoundCompletedSchema.extend({
 })
 export type RoundCompletedEnvelope = z.infer<typeof RoundCompletedEnvelopeSchema>
 
+/** The terminal outcome, captured from the `game_over`/`game_abandoned`
+ *  SSE events — the finished GET view has no engine section, so this is
+ *  the only place the result exists client-side. Never crosses the wire
+ *  in this shape (the events do, and they're schema-parsed), so a plain
+ *  type suffices. */
+export type GameOutcome =
+  | { kind: 'over'; scores: number[]; winners: number[] }
+  | { kind: 'abandoned'; reason: string }
+
 export const CreatedSessionSchema = z.object({
   token: z.string(),
   expires_at: z.string(),

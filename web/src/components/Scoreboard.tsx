@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 
-import { gameKeys } from '../lib/query'
-import type { GameView, RoundCompletedEnvelope } from '../lib/types'
+import { formatDelta } from '../lib/format'
+import { roundHistoryOptions } from '../lib/query'
+import type { GameView } from '../lib/types'
 
 interface ScoreboardProps {
   view: GameView
@@ -17,12 +18,7 @@ export function Scoreboard({ view, onClose }: ScoreboardProps) {
   const engine = view.game
   const players = view.players
 
-  const { data: history } = useQuery<RoundCompletedEnvelope[]>({
-    queryKey: gameKeys.roundHistory(view.id),
-    queryFn: async () => [],
-    staleTime: Infinity,
-    initialData: [],
-  })
+  const { data: history } = useQuery(roundHistoryOptions(view.id))
 
   const round = engine?.round ?? null
   // The live round: not yet in history (its round_completed hasn't fired).
@@ -108,7 +104,7 @@ function RoundCell({
           <span
             className={`round-cell__delta ${delta > 0 ? 'is-gain' : delta < 0 ? 'is-loss' : ''}`}
           >
-            {delta > 0 ? `+${delta}` : delta}
+            {formatDelta(delta)}
           </span>
           <span className="round-cell__total">{total}</span>
         </>

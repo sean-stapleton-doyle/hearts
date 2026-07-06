@@ -1,5 +1,6 @@
-import { QueryClient } from '@tanstack/react-query'
+import { QueryClient, queryOptions } from '@tanstack/react-query'
 import { isApiError } from './api'
+import type { GameOutcome, RoundCompletedEnvelope } from './types'
 
 // The game query cache is the single source of truth for a game's view.
 // Route loaders prime it (ensureQueryData), pages read it (useQuery),
@@ -13,18 +14,39 @@ export const gameKeys = {
   // terminal SSE event — the finished `GameView` has no engine section, so
   // the result is stashed here for the finished screen to read.
   result: (id: string) => ['games', id, 'result'] as const,
-  // The latest round_completed payload, stashed by the SSE bridge so the
-  // table can show a round-end summary before revealing the next round.
-  // Deliberately NOT nested under detail(id): the summary is read by an
-  // *active* query while the table is mounted, and every detail(id)
-  // invalidation (SSE bridge, play/bid mutations) prefix-matches children —
-  // it would refetch the stash's null queryFn and wipe the payload.
-  roundSummary: (id: string) => ['round-summary', id] as const,
   // Every round_completed seen so far, accumulated by the SSE bridge (the
   // stream replays the full log on a fresh connection, so this rebuilds
-  // after a reload). Same non-nesting rationale as roundSummary.
+  // after a reload). Deliberately NOT nested under detail(id): the history
+  // is read by an *active* query while the table is mounted, and every
+  // detail(id) invalidation (SSE bridge, play/bid mutations) prefix-matches
+  // children — it would refetch the stash's empty queryFn and wipe the data.
   roundHistory: (id: string) => ['round-history', id] as const,
 }
+
+// ── SSE-fed stashes ─────────────────────────────────────────────────────
+// Read-handles for state the SSE bridge pushes with setQueryData: the
+// queryFn returns the empty value and staleTime is Infinity, so the query
+// never refetches — the bridge is the only writer. This is client state
+// living in the Query cache on purpose (one cache, one devtool, no second
+// store); these helpers are the single home for that footgun.
+
+/** Per-round history rows for the scoreboard (rebuilt by event replay). */
+export const roundHistoryOptions = (id: string) =>
+  queryOptions<RoundCompletedEnvelope[]>({
+    queryKey: gameKeys.roundHistory(id),
+    queryFn: async () => [],
+    staleTime: Infinity,
+    initialData: [],
+  })
+
+/** The terminal outcome for the finished screen. */
+export const gameResultOptions = (id: string) =>
+  queryOptions<GameOutcome | null>({
+    queryKey: gameKeys.result(id),
+    queryFn: async () => null,
+    staleTime: Infinity,
+    initialData: null,
+  })
 
 // Account-scoped queries. Invalidate `userKeys.all` after login/register/
 // logout — the token never changes (login *binds* the session), only what

@@ -63,10 +63,6 @@ export const RANK_LABEL: Record<Rank, string> = {
   Ace: 'A',
 }
 
-export function isRedSuit(suit: Suit): boolean {
-  return suit === 'Diamonds' || suit === 'Hearts'
-}
-
 /** Compact single-token form, e.g. `10♠` — matches the CLI's log lines. */
 export function formatCard(card: Card): string {
   return `${RANK_LABEL[card.rank]}${SUIT_GLYPH[card.suit]}`

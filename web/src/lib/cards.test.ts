@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Card } from './types'
-import { cardId, displayKey, formatCard, isRedSuit, sortHand, suitToken } from './cards'
+import { cardId, displayKey, formatCard, sortHand, suitToken } from './cards'
 
 const card = (rank: Card['rank'], suit: Card['suit']): Card => ({ rank, suit })
 
@@ -46,13 +46,6 @@ describe('formatting', () => {
   it('formatCard matches the CLI log form', () => {
     expect(formatCard(card('Ten', 'Spades'))).toBe('10♠')
     expect(formatCard(card('Queen', 'Hearts'))).toBe('Q♥')
-  })
-
-  it('marks diamonds and hearts red, clubs/spades black', () => {
-    expect(isRedSuit('Diamonds')).toBe(true)
-    expect(isRedSuit('Hearts')).toBe(true)
-    expect(isRedSuit('Clubs')).toBe(false)
-    expect(isRedSuit('Spades')).toBe(false)
   })
 
   it('exposes a lowercase suit token for CSS', () => {

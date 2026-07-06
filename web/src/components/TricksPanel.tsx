@@ -23,6 +23,25 @@ export function TrickChips({ trick }: { trick: CompletedTrickView }) {
   )
 }
 
+/** A trick's chips plus who won it — the caption row shared by the
+ *  last-trick panel and the round recap's final-trick block. */
+export function TrickTakenLine({
+  trick,
+  takerName,
+}: {
+  trick: CompletedTrickView
+  takerName: string
+}) {
+  return (
+    <div className="mt-0.5 flex items-center gap-1.5">
+      <TrickChips trick={trick} />
+      <span className="max-w-28 truncate text-[0.68rem] font-semibold text-mute">
+        {takerName} took it
+      </span>
+    </div>
+  )
+}
+
 interface LastTrickPanelProps {
   tricks: CompletedTrickView[]
   nameBySeat: (seat: number) => string
@@ -42,12 +61,7 @@ export function LastTrickPanel({ tricks, nameBySeat }: LastTrickPanelProps) {
       <p className="m-0 text-[0.6rem] font-bold uppercase tracking-widest text-mute">
         Last trick
       </p>
-      <div className="mt-0.5 flex items-center gap-1.5">
-        <TrickChips trick={last} />
-        <span className="max-w-28 truncate text-[0.68rem] font-semibold text-mute">
-          {nameBySeat(last.winner)} took it
-        </span>
-      </div>
+      <TrickTakenLine trick={last} takerName={nameBySeat(last.winner)} />
     </div>
   )
 }

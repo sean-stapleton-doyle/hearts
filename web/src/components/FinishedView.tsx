@@ -1,29 +1,21 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 
-import { gameKeys } from '../lib/query'
+import { nameBySeat, playerBySeat } from '../lib/players'
+import { gameResultOptions } from '../lib/query'
 import type { GameView } from '../lib/types'
-
-type Result =
-  | { kind: 'over'; scores: number[]; winners: number[] }
-  | { kind: 'abandoned'; reason: string }
-  | null
 
 const playAgainLook =
   'self-center rounded-lg border-2 border-ink bg-trump px-8 py-2.5 font-display font-extrabold uppercase tracking-wider text-white shadow-hard hover:bg-trump-deep hover:no-underline'
 
 export function FinishedView({ view }: { view: GameView }) {
   // The outcome arrives via the terminal SSE event (the finished GET view
-  // has no engine/scores). It's stashed in the result cache by the SSE bridge.
-  const { data: result } = useQuery<Result>({
-    queryKey: gameKeys.result(view.id),
-    queryFn: async () => null,
-    staleTime: Infinity,
-    initialData: null,
-  })
+  // has no engine/scores). It's stashed in the result cache by the SSE
+  // bridge — null on a fresh load of an already-finished game, where the
+  // stream never opens (hence the "scores unavailable" fallback below).
+  const { data: result } = useQuery(gameResultOptions(view.id))
 
-  const name = (seat: number) =>
-    view.players.find((p) => p.seat === seat)?.display_name ?? `seat ${seat}`
+  const name = (seat: number) => nameBySeat(view.players, seat)
 
   if (result?.kind === 'abandoned') {
     return (
@@ -56,7 +48,7 @@ export function FinishedView({ view }: { view: GameView }) {
         <ol className="m-0 w-full list-none p-0">
           {standings.map((row, i) => {
             const isWinner = winners?.includes(row.seat) ?? false
-            const isYou = view.players.find((p) => p.seat === row.seat)?.is_you ?? false
+            const isYou = playerBySeat(view.players, row.seat)?.is_you ?? false
             return (
               <li
                 key={row.seat}

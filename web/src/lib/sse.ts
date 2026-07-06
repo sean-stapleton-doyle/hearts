@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { API_BASE } from './api'
 import { gameKeys } from './query'
 import { getToken } from './session'
-import { GameEventEnvelopeSchema, type RoundCompletedEnvelope } from './types'
+import { GameEventEnvelopeSchema, type GameOutcome, type RoundCompletedEnvelope } from './types'
 
 /**
  * Subscribe to a game's SSE event log and keep the TanStack Query cache in
@@ -64,18 +64,12 @@ export function useGameEvents(gameId: string | undefined): void {
       }
       // Terminal events also seed the finished screen, whose GET view has no
       // engine/scores — the outcome only arrives via this stream.
-      if (envelope.type === 'game_over') {
-        queryClient.setQueryData(gameKeys.result(gameId), {
-          kind: 'over' as const,
-          scores: envelope.scores,
-          winners: envelope.winners,
-        })
-        es.close()
-      } else if (envelope.type === 'game_abandoned') {
-        queryClient.setQueryData(gameKeys.result(gameId), {
-          kind: 'abandoned' as const,
-          reason: envelope.reason,
-        })
+      if (envelope.type === 'game_over' || envelope.type === 'game_abandoned') {
+        const outcome: GameOutcome =
+          envelope.type === 'game_over'
+            ? { kind: 'over', scores: envelope.scores, winners: envelope.winners }
+            : { kind: 'abandoned', reason: envelope.reason }
+        queryClient.setQueryData(gameKeys.result(gameId), outcome)
         es.close()
       }
     }

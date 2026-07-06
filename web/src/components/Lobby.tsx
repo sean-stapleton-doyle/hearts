@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { api, isApiError } from '../lib/api'
 import { gameKeys } from '../lib/query'
+import { useCopyToClipboard } from '../hooks/useCopyToClipboard'
 import type { GameView } from '../lib/types'
 
 const MAX_PLAYERS = 7
@@ -10,19 +11,16 @@ const MAX_PLAYERS = 7
 export function Lobby({ view }: { view: GameView }) {
   const queryClient = useQueryClient()
   const [error, setError] = useState<string | null>(null)
-  const [copiedCode, setCopiedCode] = useState(false)
-  const [copiedLink, setCopiedLink] = useState(false)
+  const codeCopy = useCopyToClipboard()
+  const linkCopy = useCopyToClipboard()
 
   const me = view.players.find((p) => p.is_you)
   const canStart = Boolean(me?.is_creator) && view.players.length >= 2
   // Origin is correct in both dev (localhost:3000) and prod; the `/join/:code`
   // route already handles direct navigation, so this URL drops a recipient
   // straight into the join flow.
-  const inviteUrl =
-    typeof window !== 'undefined'
-      ? `${window.location.origin}/join/${view.invite_code}`
-      : view.invite_code
-  const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+  const inviteUrl = `${window.location.origin}/join/${view.invite_code}`
+  const canShare = typeof navigator.share === 'function'
 
   const startMutation = useMutation({
     mutationFn: () => api.startGame(view.id),
@@ -34,32 +32,12 @@ export function Lobby({ view }: { view: GameView }) {
     onError: (error) => setError(isApiError(error) ? error.message : 'could not start'),
   })
 
-  async function copyCode() {
-    try {
-      await navigator.clipboard?.writeText(view.invite_code)
-      setCopiedCode(true)
-      setTimeout(() => setCopiedCode(false), 1500)
-    } catch {
-      /* clipboard unavailable — ignore */
-    }
-  }
-
-  async function copyLink() {
-    try {
-      await navigator.clipboard?.writeText(inviteUrl)
-      setCopiedLink(true)
-      setTimeout(() => setCopiedLink(false), 1500)
-    } catch {
-      /* clipboard unavailable — ignore */
-    }
-  }
-
   async function shareLink() {
     try {
       await navigator.share({ title: 'Hearts', url: inviteUrl })
     } catch {
       // AbortError (user dismissed the sheet) or unsupported — fall back to copy.
-      await copyLink()
+      await linkCopy.copy(inviteUrl)
     }
   }
 
@@ -73,20 +51,20 @@ export function Lobby({ view }: { view: GameView }) {
       <button
         type="button"
         className="flex flex-col items-center gap-1 rounded-xl border-2 border-ink bg-paper px-4 py-5 shadow-hard"
-        onClick={copyCode}
+        onClick={() => codeCopy.copy(view.invite_code)}
       >
         <span className="text-xs font-bold uppercase tracking-widest text-mute">Invite code</span>
         <span className="font-display text-5xl font-extrabold tracking-[0.16em] text-trump [font-stretch:118%]">
           {view.invite_code}
         </span>
-        <span className="text-sm font-semibold">{copiedCode ? 'Copied!' : 'Copy code'}</span>
+        <span className="text-sm font-semibold">{codeCopy.copied ? 'Copied!' : 'Copy code'}</span>
       </button>
 
       {/* The shareable link cluster: copy for paste-anywhere, share for the
           OS sheet on mobile/desktop where supported. */}
       <div className="flex gap-2">
-        <button type="button" className="flex-1" onClick={copyLink}>
-          {copiedLink ? 'Link copied!' : 'Copy invite link'}
+        <button type="button" className="flex-1" onClick={() => linkCopy.copy(inviteUrl)}>
+          {linkCopy.copied ? 'Link copied!' : 'Copy invite link'}
         </button>
         {canShare && (
           <button type="button" className="primary flex-1" onClick={shareLink}>
