@@ -106,9 +106,11 @@ A thin typed wrapper, ported from `hearts-cli/src/api.rs`'s shape:
    accepts a `?token=<hex>` query param on `GET /games/{id}/events` for
    `EventSource`. See `docs/api.md` §CORS. Future hardening: a
    short-lived SSE ticket so the bearer never appears in URLs/logs.
-2. **Invite links**: does `/join/:code` deserve its own route that resolves
-   to `/games/:id` after joining, or is a code-entry field on `/play`
-   enough for v1? Leaning toward the latter until someone asks for
-   shareable links.
+2. **Invite links** *(resolved)*: `/join/:code` is the canonical share target
+   — it resolves to `/games/:id` after joining, dropping a recipient straight
+   into the right place regardless of phase. The Lobby surfaces the full
+   `${origin}/join/${code}` URL via a "Copy invite link" button plus a
+   "Share…" button (`navigator.share`, where supported); the bare 6-char
+   code remains on screen for verbal sharing.
 3. **Reconnect UX**: the CLI logs "· reconnecting…"; decide whether the web
    client shows a toast/banner or just a subtle connection dot.

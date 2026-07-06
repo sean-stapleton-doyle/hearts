@@ -6,7 +6,8 @@
 # ships the config and the static web build.
 #
 # Usage:
-#   deploy/deploy.sh --host HOST --domain DOMAIN [--user USER] [--port PORT] [--bootstrap-docker]
+#   deploy/deploy.sh --host HOST --domain DOMAIN [--user USER] [--port PORT] \
+#                     [--ssh-key PATH] [--bootstrap-docker]
 #
 # Requires deploy/.env to exist locally the first time you deploy to a
 # given VPS (cp deploy/.env.example deploy/.env, fill it in). It's copied
@@ -23,12 +24,20 @@ Usage: deploy/deploy.sh --host HOST --domain DOMAIN [options]
                           e.g. hearts.example.com (required — used only
                           for the final printed URL, not sent anywhere;
                           the real source of truth is DOMAIN in .env)
-  --user USER            SSH user (default: root)
+  --user USER            SSH user (default: root — Hetzner's Debian
+                          images log in as root by default)
   --port PORT            SSH port (default: 22)
+  --ssh-key PATH         Path to the SSH private key to use (passed to
+                          ssh/rsync as -i). Default: whatever ssh picks
+                          up on its own (agent, ~/.ssh/config, etc.)
   --bootstrap-docker     Install Docker + the Compose plugin on the VPS
                           first, via get.docker.com. Safe to pass on every
                           deploy — a no-op once Docker is already there —
-                          but meant for a fresh box's first deploy.
+                          but meant for a fresh box's first deploy. If the
+                          GHCR_USER/GHCR_TOKEN env vars are set, also logs
+                          the VPS's Docker in to ghcr.io (needed if
+                          hearts-server's package is private) — set
+                          GHCR_TOKEN to a classic PAT with read:packages.
   -h, --help             Show this help
 EOF
 }
@@ -37,6 +46,7 @@ HOST=""
 DOMAIN=""
 SSH_USER="root"
 SSH_PORT="22"
+SSH_KEY=""
 BOOTSTRAP=0
 
 while [[ $# -gt 0 ]]; do
@@ -45,6 +55,7 @@ while [[ $# -gt 0 ]]; do
     --domain) DOMAIN="$2"; shift 2 ;;
     --user) SSH_USER="$2"; shift 2 ;;
     --port) SSH_PORT="$2"; shift 2 ;;
+    --ssh-key) SSH_KEY="$2"; shift 2 ;;
     --bootstrap-docker) BOOTSTRAP=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "error: unknown argument: $1" >&2; usage; exit 1 ;;
@@ -64,16 +75,27 @@ REMOTE_ROOT="/opt/hearts"
 REMOTE_DEPLOY="$REMOTE_ROOT/deploy"
 REMOTE_WEB_DIST="$REMOTE_ROOT/web/dist"
 
-ssh_cmd() { ssh -p "$SSH_PORT" "$SSH_TARGET" "$@"; }
-rsync_to() { rsync -az -e "ssh -p $SSH_PORT" "$@"; }
+SSH_OPTS=(-p "$SSH_PORT")
+[[ -n "$SSH_KEY" ]] && SSH_OPTS+=(-i "$SSH_KEY")
+SSH_E="ssh -p $SSH_PORT${SSH_KEY:+ -i $SSH_KEY}"
+
+ssh_cmd() { ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "$@"; }
+rsync_to() { rsync -az -e "$SSH_E" "$@"; }
 
 if [[ "$BOOTSTRAP" -eq 1 ]]; then
   echo "==> installing Docker on $HOST (get.docker.com)"
   ssh_cmd 'curl -fsSL https://get.docker.com | sh'
+
+  if [[ -n "${GHCR_TOKEN:-}" ]]; then
+    echo "==> logging Docker in to ghcr.io on $HOST as ${GHCR_USER:?GHCR_USER must be set alongside GHCR_TOKEN}"
+    ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "docker login ghcr.io -u '$GHCR_USER' --password-stdin" <<< "$GHCR_TOKEN"
+  fi
 fi
 
 echo "==> building web app"
-(cd "$REPO_ROOT/web" && pnpm install --frozen-lockfile && pnpm build)
+# Caddy proxies /api/* (prefix stripped) to hearts-server on the same
+# origin — relative, so this works for any domain without templating it.
+(cd "$REPO_ROOT/web" && pnpm install --frozen-lockfile && VITE_API_BASE=/api pnpm build)
 
 echo "==> creating remote directories"
 ssh_cmd "mkdir -p '$REMOTE_DEPLOY' '$REMOTE_WEB_DIST'"
@@ -83,7 +105,7 @@ rsync_to "$SCRIPT_DIR/compose.yaml" "$SCRIPT_DIR/Caddyfile" "$SSH_TARGET:$REMOTE
 
 echo "==> syncing web build to $HOST"
 # --delete: a removed/renamed asset shouldn't linger and get served stale.
-rsync -az --delete -e "ssh -p $SSH_PORT" "$REPO_ROOT/web/dist/" "$SSH_TARGET:$REMOTE_WEB_DIST/"
+rsync -az --delete -e "$SSH_E" "$REPO_ROOT/web/dist/" "$SSH_TARGET:$REMOTE_WEB_DIST/"
 
 if ssh_cmd "test -f '$REMOTE_DEPLOY/.env'"; then
   echo "==> $HOST already has a .env — leaving it alone"
@@ -101,5 +123,5 @@ echo "==> pulling image and (re)starting the stack on $HOST"
 ssh_cmd "cd '$REMOTE_DEPLOY' && docker compose pull && docker compose up -d"
 
 echo "==> done — https://$DOMAIN should be live shortly"
-echo "    logs:   ssh -p $SSH_PORT $SSH_TARGET 'cd $REMOTE_DEPLOY && docker compose logs -f'"
-echo "    status: ssh -p $SSH_PORT $SSH_TARGET 'cd $REMOTE_DEPLOY && docker compose ps'"
+echo "    logs:   ssh ${SSH_OPTS[*]} $SSH_TARGET 'cd $REMOTE_DEPLOY && docker compose logs -f'"
+echo "    status: ssh ${SSH_OPTS[*]} $SSH_TARGET 'cd $REMOTE_DEPLOY && docker compose ps'"

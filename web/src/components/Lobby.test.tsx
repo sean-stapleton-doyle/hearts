@@ -18,6 +18,15 @@ vi.mock('../lib/api', async () => {
   }
 })
 
+// jsdom doesn't provide `navigator.clipboard`; stub it so the copy-code and
+// copy-link handlers can be observed. `navigator.share` is left undefined so
+// the Share button (gated on feature detection) doesn't render.
+const clipboardSpy = vi.fn().mockResolvedValue(undefined)
+Object.defineProperty(navigator, 'clipboard', {
+  configurable: true,
+  value: { writeText: clipboardSpy },
+})
+
 // Creator with one other player seated → start is enabled.
 const lobbyView = {
   id: 'g1',
@@ -50,5 +59,24 @@ describe('Lobby', () => {
     await vi.waitFor(() => {
       expect(api.startGame).toHaveBeenCalledWith('g1')
     })
+  })
+
+  it('copies the bare code when the hero block is clicked', () => {
+    renderWithClient(<Lobby view={lobbyView} />)
+
+    fireEvent.click(screen.getByText('Copy code'))
+    expect(clipboardSpy).toHaveBeenCalledWith('MJTZ6C')
+  })
+
+  it('copies the full invite URL when "Copy invite link" is clicked', () => {
+    renderWithClient(<Lobby view={lobbyView} />)
+
+    fireEvent.click(screen.getByText('Copy invite link'))
+    expect(clipboardSpy).toHaveBeenCalledWith(`${window.location.origin}/join/MJTZ6C`)
+  })
+
+  it('does not render the Share button when navigator.share is unavailable', () => {
+    renderWithClient(<Lobby view={lobbyView} />)
+    expect(screen.queryByText('Share…')).toBeNull()
   })
 })
