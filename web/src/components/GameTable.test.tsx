@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { GameTable } from './GameTable'
-import type { GameView, PendingRecap, RoundSummary } from '../lib/types'
+import type { GameView, PendingRecap, RoundCompletedEnvelope } from '../lib/types'
 
 vi.mock('../lib/sse', () => ({ useGameEvents: () => {} }))
 vi.mock('../lib/anim', async () => {
@@ -92,7 +92,7 @@ const freshRoundView = {
   },
 } as unknown as GameView
 
-const roundSummary: RoundSummary = {
+const roundSummary: RoundCompletedEnvelope = {
   type: 'round_completed',
   seq: 9,
   round_index: 1,

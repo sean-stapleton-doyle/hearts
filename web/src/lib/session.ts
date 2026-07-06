@@ -7,11 +7,23 @@
 const TOKEN_KEY = 'hearts.token'
 const NAME_KEY = 'hearts.display_name'
 
+/** Server session tokens are 32 bytes hex-encoded. localStorage is an
+ *  external boundary like any other: a garbled value (manual edit, another
+ *  app's collision) would otherwise 401-loop through the bootstrap, so
+ *  anything off-shape is treated as absent and cleared. */
+const TOKEN_SHAPE = /^[0-9a-f]{64}$/
+
 let tokenCache: string | null | undefined
 
 function readToken(): string | null {
   if (tokenCache === undefined) {
-    tokenCache = localStorage.getItem(TOKEN_KEY)
+    const raw = localStorage.getItem(TOKEN_KEY)
+    if (raw !== null && !TOKEN_SHAPE.test(raw)) {
+      localStorage.removeItem(TOKEN_KEY)
+      tokenCache = null
+    } else {
+      tokenCache = raw
+    }
   }
   return tokenCache
 }

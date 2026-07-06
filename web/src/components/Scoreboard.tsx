@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { gameKeys } from '../lib/query'
-import type { GameView, RoundSummary } from '../lib/types'
+import type { GameView, RoundCompletedEnvelope } from '../lib/types'
 
 interface ScoreboardProps {
   view: GameView
@@ -17,7 +17,7 @@ export function Scoreboard({ view, onClose }: ScoreboardProps) {
   const engine = view.game
   const players = view.players
 
-  const { data: history } = useQuery<RoundSummary[]>({
+  const { data: history } = useQuery<RoundCompletedEnvelope[]>({
     queryKey: gameKeys.roundHistory(view.id),
     queryFn: async () => [],
     staleTime: Infinity,

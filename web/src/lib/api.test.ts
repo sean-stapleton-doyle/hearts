@@ -80,6 +80,13 @@ describe('api error handling', () => {
     expect(fetchMock.mock.calls).toHaveLength(1)
   })
 
+  it('surfaces an off-schema response body as a decode error', async () => {
+    setToken('T1')
+    mockFetch(async () => res({ id: 'g1', status: 'in_progress' })) // missing required fields
+
+    await expect(api.getGame('g1')).rejects.toMatchObject({ kind: 'decode' })
+  })
+
   it('wraps a network failure as a transport error', async () => {
     setToken('T1')
     mockFetch(async () => {
@@ -91,9 +98,10 @@ describe('api error handling', () => {
 })
 
 describe('isApiError', () => {
-  it('narrows server and transport errors only', () => {
+  it('narrows server, transport, and decode errors only', () => {
     expect(isApiError({ kind: 'server', status: 404, code: 'x', message: 'y' })).toBe(true)
     expect(isApiError({ kind: 'transport', message: 'y' })).toBe(true)
+    expect(isApiError({ kind: 'decode', message: 'y' })).toBe(true)
     expect(isApiError(new Error('nope'))).toBe(false)
     expect(isApiError(null)).toBe(false)
     expect(isApiError({ status: 500 })).toBe(false)

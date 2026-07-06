@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { API_BASE } from './api'
 import { gameKeys } from './query'
 import { getToken } from './session'
-import type { GameEventEnvelope, RoundSummary } from './types'
+import { GameEventEnvelopeSchema, type RoundCompletedEnvelope } from './types'
 
 /**
  * Subscribe to a game's SSE event log and keep the TanStack Query cache in
@@ -27,15 +27,24 @@ export function useGameEvents(gameId: string | undefined): void {
     const es = new EventSource(url)
 
     const onMessage = (event: MessageEvent) => {
-      let envelope: GameEventEnvelope
-      try {
-        envelope = JSON.parse(event.data) as GameEventEnvelope
-      } catch {
-        return // malformed payload — the cache will resync on next refetch
-      }
-      // Any event means the view moved. `game_resumed` is handled implicitly:
-      // the refetch returns the rebuilt view, discarding any local state.
+      // Any event means the view moved — invalidate before parsing so even
+      // a payload this client can't decode (e.g. an event type added by a
+      // newer server) still refreshes the cache. `game_resumed` is handled
+      // implicitly: the refetch returns the rebuilt view, discarding any
+      // local state.
       queryClient.invalidateQueries({ queryKey: gameKeys.detail(gameId) })
+      let raw: unknown
+      try {
+        raw = JSON.parse(event.data)
+      } catch {
+        return // malformed payload — the refetch above resyncs the cache
+      }
+      const parsed = GameEventEnvelopeSchema.safeParse(raw)
+      if (!parsed.success) {
+        if (import.meta.env.DEV) console.warn('SSE payload failed to parse', parsed.error)
+        return // unknown/drifted event shape — degrade to the refetch
+      }
+      const envelope = parsed.data
       // Stash the round summary for the table's round-end overlay. The final
       // round is skipped — game_over lands right behind it and FinishedView
       // takes over. A newer summary simply replaces an undismissed one.
@@ -47,7 +56,7 @@ export function useGameEvents(gameId: string | undefined): void {
         // Accumulate the per-round history for the scoreboard and the
         // round-end recap overlay. Replayed and duplicate events just
         // overwrite their round's row.
-        queryClient.setQueryData<RoundSummary[]>(gameKeys.roundHistory(gameId), (prev) =>
+        queryClient.setQueryData<RoundCompletedEnvelope[]>(gameKeys.roundHistory(gameId), (prev) =>
           [...(prev ?? []).filter((r) => r.round_index !== envelope.round_index), envelope].sort(
             (a, b) => a.round_index - b.round_index,
           ),

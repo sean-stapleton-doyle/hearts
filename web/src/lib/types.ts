@@ -1,241 +1,289 @@
 // Server DTOs, mirroring hearts-server/src/gameplay.rs and the CLI's
 // api.rs 1:1. See server/docs/api.md §The game view — its examples double
 // as the reference for these shapes.
+//
+// Schemas are the source of truth: every TS type is `z.infer`'d from its
+// schema, and the API/SSE boundaries parse with them (api.ts `request`,
+// sse.ts `onMessage`), so a wire payload that drifts from these shapes
+// fails loudly at the boundary instead of corrupting the cache. Zod's
+// default strip-unknown-keys behavior is deliberate — the server may add
+// fields without breaking older clients.
+import { z } from 'zod'
 
-export type Suit = 'Clubs' | 'Diamonds' | 'Spades' | 'Hearts'
+const seat = z.number().int()
 
-export type Rank =
-  | 'Two'
-  | 'Three'
-  | 'Four'
-  | 'Five'
-  | 'Six'
-  | 'Seven'
-  | 'Eight'
-  | 'Nine'
-  | 'Ten'
-  | 'Jack'
-  | 'Queen'
-  | 'King'
-  | 'Ace'
+export const SuitSchema = z.enum(['Clubs', 'Diamonds', 'Spades', 'Hearts'])
+export type Suit = z.infer<typeof SuitSchema>
 
-export interface Card {
-  suit: Suit
-  rank: Rank
-}
+export const RankSchema = z.enum([
+  'Two',
+  'Three',
+  'Four',
+  'Five',
+  'Six',
+  'Seven',
+  'Eight',
+  'Nine',
+  'Ten',
+  'Jack',
+  'Queen',
+  'King',
+  'Ace',
+])
+export type Rank = z.infer<typeof RankSchema>
 
-export type GameStatus = 'lobby' | 'in_progress' | 'finished' | 'abandoned'
+export const CardSchema = z.object({ suit: SuitSchema, rank: RankSchema })
+export type Card = z.infer<typeof CardSchema>
 
-export type Phase = 'Bidding' | 'Playing' | 'GameOver'
+export const GameStatusSchema = z.enum(['lobby', 'in_progress', 'finished', 'abandoned'])
+export type GameStatus = z.infer<typeof GameStatusSchema>
 
-export type ActionType = 'bid' | 'play'
+export const PhaseSchema = z.enum(['Bidding', 'Playing', 'GameOver'])
+export type Phase = z.infer<typeof PhaseSchema>
 
-export interface TurnRef {
-  action: ActionType
-  seat: number
-}
+export const ActionTypeSchema = z.enum(['bid', 'play'])
+export type ActionType = z.infer<typeof ActionTypeSchema>
 
-export interface PlayerInfo {
-  seat: number
-  display_name: string
-  is_you: boolean
-  is_creator: boolean
-}
+export const TurnRefSchema = z.object({ action: ActionTypeSchema, seat })
+export type TurnRef = z.infer<typeof TurnRefSchema>
 
-export interface PlayView {
-  seat: number
-  card: Card
-}
+export const PlayerInfoSchema = z.object({
+  seat,
+  display_name: z.string(),
+  is_you: z.boolean(),
+  is_creator: z.boolean(),
+})
+export type PlayerInfo = z.infer<typeof PlayerInfoSchema>
 
-export interface TrickView {
-  leader: number
-  plays: PlayView[]
-}
+export const PlayViewSchema = z.object({ seat, card: CardSchema })
+export type PlayView = z.infer<typeof PlayViewSchema>
+
+export const TrickViewSchema = z.object({ leader: seat, plays: z.array(PlayViewSchema) })
+export type TrickView = z.infer<typeof TrickViewSchema>
 
 /** A completed trick — all seats have played, so the winner is known. */
-export interface CompletedTrickView extends TrickView {
-  winner: number
-}
+export const CompletedTrickViewSchema = TrickViewSchema.extend({ winner: seat })
+export type CompletedTrickView = z.infer<typeof CompletedTrickViewSchema>
 
-export interface RoundView {
-  cards_dealt: number
-  dealer: number
-  bids: (number | null)[]
-  tricks_won: number[]
-  current_trick: TrickView | null
+export const RoundViewSchema = z.object({
+  cards_dealt: z.number().int(),
+  dealer: seat,
+  bids: z.array(z.number().int().nullable()),
+  tricks_won: z.array(z.number().int()),
+  current_trick: TrickViewSchema.nullable(),
   /** Every completed trick this round, in play order — empty at the start
    *  of a round. The latest entry is shown while `current_trick` is still
    *  empty so the showdown stays visible; the full list backs the tricks
    *  history panel. */
-  tricks: CompletedTrickView[]
-}
+  tricks: z.array(CompletedTrickViewSchema),
+})
+export type RoundView = z.infer<typeof RoundViewSchema>
 
-export interface YouView {
-  seat: number
-  hand: Card[]
+export const YouViewSchema = z.object({
+  seat,
+  hand: z.array(CardSchema),
   /** Non-null exactly when it's this viewer's bid. */
-  legal_bids: number[] | null
+  legal_bids: z.array(z.number().int()).nullable(),
   /** Non-null exactly when it's this viewer's play. */
-  legal_plays: Card[] | null
-}
+  legal_plays: z.array(CardSchema).nullable(),
+})
+export type YouView = z.infer<typeof YouViewSchema>
 
-export interface EngineView {
-  phase: Phase
-  round_index: number
-  scores: number[]
-  next: TurnRef | null
-  away: boolean[]
-  turn_deadline_in_secs: number
+/** The recap data for a held-open round, carried by the engine view. */
+export const PendingRecapSchema = z.object({
+  round_index: z.number().int(),
+  bids: z.array(z.number().int()),
+  tricks_won: z.array(z.number().int()),
+  deltas: z.array(z.number().int()),
+  scores: z.array(z.number().int()),
+  next_round_index: z.number().int().nullable(),
+  next_dealer: seat.nullable(),
+  /** The completed round's tricks, captured before the engine advanced —
+   *  the round itself is gone by the time the recap shows. Null only if
+   *  the server restarted while the gate was up. */
+  tricks: z.array(CompletedTrickViewSchema).nullable(),
+})
+export type PendingRecap = z.infer<typeof PendingRecapSchema>
+
+export const EngineViewSchema = z.object({
+  phase: PhaseSchema,
+  round_index: z.number().int(),
+  scores: z.array(z.number().int()),
+  next: TurnRefSchema.nullable(),
+  away: z.array(z.boolean()),
+  turn_deadline_in_secs: z.number(),
   /** Non-null when the just-completed round is held open on the recap
    *  gate, awaiting host acknowledgement. Drives the round-end overlay
    *  (server-authoritative, so it survives reloads). */
-  pending_ack: number | null
+  pending_ack: z.number().int().nullable(),
   /** The recap payload for the held-open round (same shape as
    *  `round_completed` minus `type`/`seq`/`next`). Null when no round is
    *  pending. Carried by the view so the gate renders immediately without
    *  waiting for the SSE event. */
-  pending_recap: PendingRecap | null
-  round: RoundView | null
-  you: YouView | null
-}
+  pending_recap: PendingRecapSchema.nullable(),
+  round: RoundViewSchema.nullable(),
+  you: YouViewSchema.nullable(),
+})
+export type EngineView = z.infer<typeof EngineViewSchema>
 
-/** The recap data for a held-open round, carried by the engine view. */
-export interface PendingRecap {
-  round_index: number
-  bids: number[]
-  tricks_won: number[]
-  deltas: number[]
-  scores: number[]
-  next_round_index: number | null
-  next_dealer: number | null
-  /** The completed round's tricks, captured before the engine advanced —
-   *  the round itself is gone by the time the recap shows. Null only if
-   *  the server restarted while the gate was up. */
-  tricks: CompletedTrickView[] | null
-}
-
-export interface GameView {
-  id: string
-  invite_code: string
-  status: GameStatus
-  players: PlayerInfo[]
-  created_at?: string
-  started_at?: string | null
+export const GameViewSchema = z.object({
+  id: z.string(),
+  invite_code: z.string(),
+  status: GameStatusSchema,
+  players: z.array(PlayerInfoSchema),
+  created_at: z.string().optional(),
+  started_at: z.string().nullable().optional(),
   /** null unless status === 'in_progress'. */
-  game: EngineView | null
-}
+  game: EngineViewSchema.nullable(),
+})
+export type GameView = z.infer<typeof GameViewSchema>
 
 // ── SSE events ──────────────────────────────────────────────────────────
 // The server serializes its `Envelope { seq, event }` with the event
 // flattened in, so each `data:` payload is the event fields plus a top-level
 // `seq`. The SSE `id:` line carries the same seq for Last-Event-ID resume.
 
-export type GameEvent =
-  | {
-      type: 'game_started'
-      players: string[]
-      round_index: number
-      cards_dealt: number
-      dealer: number
-      next: TurnRef | null
-    }
-  | { type: 'bid_placed'; seat: number; bid: number; auto: boolean; next: TurnRef | null }
-  | { type: 'card_played'; seat: number; card: Card; auto: boolean; next: TurnRef | null }
-  | { type: 'trick_completed'; winner: number; next: TurnRef | null }
-  | {
-      type: 'round_completed'
-      round_index: number
-      bids: number[]
-      tricks_won: number[]
-      deltas: number[]
-      scores: number[]
-      next_round_index: number | null
-      next_dealer: number | null
-      next: TurnRef | null
-    }
-  | {
-      type: 'round_acknowledged'
-      round_index: number
-      auto: boolean
-      next: TurnRef | null
-    }
-  | { type: 'game_over'; scores: number[]; winners: number[] }
-  | {
-      type: 'game_resumed'
-      round_index: number
-      cards_dealt: number
-      dealer: number
-      scores: number[]
-      next: TurnRef | null
-    }
-  | { type: 'game_abandoned'; reason: string }
+const next = TurnRefSchema.nullable()
+
+export const RoundCompletedSchema = z.object({
+  type: z.literal('round_completed'),
+  round_index: z.number().int(),
+  bids: z.array(z.number().int()),
+  tricks_won: z.array(z.number().int()),
+  deltas: z.array(z.number().int()),
+  scores: z.array(z.number().int()),
+  next_round_index: z.number().int().nullable(),
+  next_dealer: seat.nullable(),
+  next,
+})
+
+export const GameEventSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('game_started'),
+    players: z.array(z.string()),
+    round_index: z.number().int(),
+    cards_dealt: z.number().int(),
+    dealer: seat,
+    next,
+  }),
+  z.object({
+    type: z.literal('bid_placed'),
+    seat,
+    bid: z.number().int(),
+    auto: z.boolean(),
+    next,
+  }),
+  z.object({
+    type: z.literal('card_played'),
+    seat,
+    card: CardSchema,
+    auto: z.boolean(),
+    next,
+  }),
+  z.object({ type: z.literal('trick_completed'), winner: seat, next }),
+  RoundCompletedSchema,
+  z.object({
+    type: z.literal('round_acknowledged'),
+    round_index: z.number().int(),
+    auto: z.boolean(),
+    next,
+  }),
+  z.object({
+    type: z.literal('game_over'),
+    scores: z.array(z.number().int()),
+    winners: z.array(seat),
+  }),
+  z.object({
+    type: z.literal('game_resumed'),
+    round_index: z.number().int(),
+    cards_dealt: z.number().int(),
+    dealer: seat,
+    scores: z.array(z.number().int()),
+    next,
+  }),
+  z.object({ type: z.literal('game_abandoned'), reason: z.string() }),
+])
+export type GameEvent = z.infer<typeof GameEventSchema>
 
 /** A parsed SSE `data:` payload: the event plus its log position. */
-export type GameEventEnvelope = GameEvent & { seq: number }
+export const GameEventEnvelopeSchema = GameEventSchema.and(
+  z.object({ seq: z.number().int() }),
+)
+export type GameEventEnvelope = z.infer<typeof GameEventEnvelopeSchema>
 
 /** The `round_completed` payload as captured for the round-end summary
- *  overlay; `seq` distinguishes one round's summary from the next. */
-export type RoundSummary = Extract<GameEvent, { type: 'round_completed' }> & { seq: number }
+ *  overlay; `seq` distinguishes one round's summary from the next.
+ *  (Named for the event envelope — the RoundSummary *component* renders
+ *  the PendingRecap, a different shape.) */
+export const RoundCompletedEnvelopeSchema = RoundCompletedSchema.extend({
+  seq: z.number().int(),
+})
+export type RoundCompletedEnvelope = z.infer<typeof RoundCompletedEnvelopeSchema>
 
-export interface CreatedSession {
-  token: string
-  expires_at: string
-}
+export const CreatedSessionSchema = z.object({
+  token: z.string(),
+  expires_at: z.string(),
+})
+export type CreatedSession = z.infer<typeof CreatedSessionSchema>
 
-export interface SessionInfo {
-  user_id: string | null
-  expires_at: string
-}
+export const SessionInfoSchema = z.object({
+  user_id: z.string().nullable(),
+  expires_at: z.string(),
+})
+export type SessionInfo = z.infer<typeof SessionInfoSchema>
 
-export interface ActionAck {
-  seq: number
-}
+export const ActionAckSchema = z.object({ seq: z.number().int() })
+export type ActionAck = z.infer<typeof ActionAckSchema>
 
 // ── Accounts (docs/api.md §Accounts) ────────────────────────────────────
 
-export interface AccountInfo {
-  user_id: string
-  username: string
+export const AccountInfoSchema = z.object({
+  user_id: z.string(),
+  username: z.string(),
   /** A fresh session token: register/login rotate the session's token as
    *  a hardening measure, so the caller must store this in place of
    *  whatever it had before (the old one stops working immediately). */
-  token: string
-}
+  token: z.string(),
+})
+export type AccountInfo = z.infer<typeof AccountInfoSchema>
 
-export interface MeInfo {
-  user_id: string
-  username: string
-  created_at: string
-}
+export const MeInfoSchema = z.object({
+  user_id: z.string(),
+  username: z.string(),
+  created_at: z.string(),
+})
+export type MeInfo = z.infer<typeof MeInfoSchema>
 
-export interface GameResult {
-  scores: number[]
-  winner_seats: number[]
-}
+export const GameResultSchema = z.object({
+  scores: z.array(z.number().int()),
+  winner_seats: z.array(seat),
+})
+export type GameResult = z.infer<typeof GameResultSchema>
 
-export interface HistoryGame {
-  id: string
-  status: GameStatus
-  created_at: string
-  started_at: string | null
-  finished_at: string | null
-  created_by_you: boolean
-  your_seat: number | null
-  players: string[]
+export const HistoryGameSchema = z.object({
+  id: z.string(),
+  status: GameStatusSchema,
+  created_at: z.string(),
+  started_at: z.string().nullable(),
+  finished_at: z.string().nullable(),
+  created_by_you: z.boolean(),
+  your_seat: seat.nullable(),
+  players: z.array(z.string()),
   /** null unless finished. */
-  result: GameResult | null
-}
+  result: GameResultSchema.nullable(),
+})
+export type HistoryGame = z.infer<typeof HistoryGameSchema>
 
-export interface MyGames {
-  games: HistoryGame[]
-}
+export const MyGamesSchema = z.object({ games: z.array(HistoryGameSchema) })
+export type MyGames = z.infer<typeof MyGamesSchema>
 
 /** Hearts scores low: `best_score` is the minimum. Averages/bests are
  *  null until the account has a finished game. */
-export interface MyStats {
-  games_played: number
-  games_finished: number
-  wins: number
-  average_score: number | null
-  best_score: number | null
-}
+export const MyStatsSchema = z.object({
+  games_played: z.number().int(),
+  games_finished: z.number().int(),
+  wins: z.number().int(),
+  average_score: z.number().nullable(),
+  best_score: z.number().nullable(),
+})
+export type MyStats = z.infer<typeof MyStatsSchema>
