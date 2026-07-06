@@ -1,9 +1,14 @@
 import { PlayingCard } from './Card'
-import type { GameView } from '../lib/types'
+import type { CompletedTrickView, GameView } from '../lib/types'
 
 interface TrickAreaProps {
   view: GameView
   nameBySeat: (seat: number) => string
+  /** The round's final trick, shown as the lingering showdown during the
+   *  beat between the last card landing and the recap taking the felt.
+   *  Overrides the engine state — by then the engine has already advanced
+   *  to the next round's bidding. */
+  finale?: CompletedTrickView | null
 }
 
 /** The center of the felt. During bidding it carries a bold round marker
@@ -15,11 +20,11 @@ interface TrickAreaProps {
  *  lingers (winner highlighted) until the next lead is played, so everyone
  *  gets to read the showdown. The linger is derived purely from the view
  *  (`current_trick` empty + `last_trick` present), so it survives reloads. */
-export function TrickArea({ view, nameBySeat }: TrickAreaProps) {
+export function TrickArea({ view, nameBySeat, finale = null }: TrickAreaProps) {
   const engine = view.game!
   const round = engine.round
 
-  if (engine.phase === 'Bidding' && round) {
+  if (engine.phase === 'Bidding' && round && !finale) {
     return (
       <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center text-paper">
         <p className="font-display text-3xl font-extrabold uppercase tracking-wide [font-stretch:118%]">
@@ -33,8 +38,9 @@ export function TrickArea({ view, nameBySeat }: TrickAreaProps) {
   }
 
   const current = round?.current_trick ?? null
-  const last = round?.tricks.at(-1) ?? null
-  const lingering = (current == null || current.plays.length === 0) && last != null
+  const last = finale ?? round?.tricks.at(-1) ?? null
+  const lingering =
+    finale != null || ((current == null || current.plays.length === 0) && last != null)
   const trick = lingering ? last : current
   if (!trick || trick.plays.length === 0) {
     return (

@@ -1,5 +1,3 @@
-import { useState } from 'react'
-
 import { formatCard, suitToken } from '../lib/cards'
 import type { CompletedTrickView } from '../lib/types'
 
@@ -25,45 +23,31 @@ export function TrickChips({ trick }: { trick: CompletedTrickView }) {
   )
 }
 
-interface TricksPanelProps {
+interface LastTrickPanelProps {
   tricks: CompletedTrickView[]
   nameBySeat: (seat: number) => string
 }
 
-/** A compact corner reference for the round's trick history. Collapsed it
- *  shows just the previous trick — cards in play order plus who took it —
- *  so anyone who missed the showdown can still read it mid-trick; clicking
- *  expands it to every completed trick this round, oldest first. */
-export function TricksPanel({ tricks, nameBySeat }: TricksPanelProps) {
-  const [expanded, setExpanded] = useState(false)
-  if (tricks.length === 0) return null
-
-  const shown = expanded ? tricks : tricks.slice(-1)
-  const canExpand = tricks.length > 1
+/** A compact corner reference showing only the previous trick — cards in
+ *  play order plus who took it — so anyone who missed the showdown can
+ *  still read it mid-trick. Deliberately not the whole round's history:
+ *  remembering earlier tricks is part of the game. (The server still
+ *  retains every trick for post-game review.) */
+export function LastTrickPanel({ tricks, nameBySeat }: LastTrickPanelProps) {
+  const last = tricks.at(-1)
+  if (!last) return null
 
   return (
-    <button
-      type="button"
-      onClick={() => canExpand && setExpanded((open) => !open)}
-      aria-expanded={expanded}
-      className={`absolute bottom-3 left-3 z-10 rounded-xl border-2 border-ink bg-paper px-2.5 py-1.5 text-left shadow-[3px_3px_0_0_var(--color-ink)] ${
-        canExpand ? 'cursor-pointer' : 'cursor-default'
-      }`}
-    >
+    <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-xl border-2 border-ink bg-paper px-2.5 py-1.5 shadow-[3px_3px_0_0_var(--color-ink)]">
       <p className="m-0 text-[0.6rem] font-bold uppercase tracking-widest text-mute">
-        {expanded ? 'Tricks this round' : 'Last trick'}
-        {canExpand && (
-          <span className="ml-1 normal-case tracking-normal">{expanded ? '▾' : `+${tricks.length - 1} ▸`}</span>
-        )}
+        Last trick
       </p>
-      {shown.map((trick, i) => (
-        <div key={expanded ? i : tricks.length - 1} className="mt-0.5 flex items-center gap-1.5">
-          <TrickChips trick={trick} />
-          <span className="max-w-28 truncate text-[0.68rem] font-semibold text-mute">
-            {nameBySeat(trick.winner)} took it
-          </span>
-        </div>
-      ))}
-    </button>
+      <div className="mt-0.5 flex items-center gap-1.5">
+        <TrickChips trick={last} />
+        <span className="max-w-28 truncate text-[0.68rem] font-semibold text-mute">
+          {nameBySeat(last.winner)} took it
+        </span>
+      </div>
+    </div>
   )
 }

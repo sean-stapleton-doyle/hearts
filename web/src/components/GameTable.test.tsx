@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { GameTable } from './GameTable'
@@ -117,6 +117,14 @@ const pendingRecap: PendingRecap = {
   next_dealer: roundSummary.next_dealer,
   tricks: [
     {
+      leader: 1,
+      winner: 1,
+      plays: [
+        { seat: 1, card: { suit: 'Clubs', rank: 'Nine' } },
+        { seat: 0, card: { suit: 'Clubs', rank: 'Four' } },
+      ],
+    },
+    {
       leader: 0,
       winner: 0,
       plays: [
@@ -191,6 +199,7 @@ describe('GameTable', () => {
     sessionStorage.clear()
   })
   afterEach(() => {
+    vi.useRealTimers()
     vi.clearAllMocks()
     cleanup()
   })
@@ -266,16 +275,28 @@ describe('GameTable', () => {
 
   it('renders the round gate embedded and lets the host continue', async () => {
     const { api } = await import('../lib/api')
+    vi.useFakeTimers()
     renderWithClient(<GameTable view={heldGateHostView} />)
+
+    // The final showdown gets its beat on the felt before the recap:
+    // winner caption and cards, no summary panel yet.
+    expect(screen.getByText('alice takes the trick')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Queen of Diamonds' })).toBeTruthy()
+    expect(screen.queryByLabelText('Round 1 complete')).toBeNull()
+
+    act(() => vi.advanceTimersByTime(4000))
+    vi.useRealTimers()
 
     // Recap is embedded on the felt (aria-label, not a modal dialog role).
     expect(screen.getByLabelText('Round 1 complete')).toBeTruthy()
     expect(screen.getByText('You deal round 2')).toBeTruthy()
 
-    // The completed round's tricks show what was played.
+    // The recap shows the final trick only — earlier tricks stay hidden.
     const chips = screen.getAllByTestId('trick-chip')
     expect(chips.map((c) => c.textContent)).toEqual(['Q♦', '3♦'])
+    expect(screen.getByText('Final trick')).toBeTruthy()
     expect(screen.getByText('alice took it')).toBeTruthy()
+    expect(screen.queryByText('bob took it')).toBeNull()
 
     // Host sees and clicks Continue; the mutation fires.
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
@@ -306,9 +327,23 @@ describe('GameTable', () => {
   })
 
   it('tells non-hosts to wait for the host at the round gate', () => {
+    vi.useFakeTimers()
     renderWithClient(<GameTable view={heldGateGuestView} />)
+    act(() => vi.advanceTimersByTime(4000))
 
     expect(screen.getByText(/Waiting for alice to continue/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
+  })
+
+  it('skips the showdown beat when the recap carries no tricks', () => {
+    // A server restart mid-gate loses pending tricks; the recap must not
+    // wait on a beat it can't show.
+    const v = structuredClone(heldGateHostView) as GameView & {
+      game: NonNullable<GameView['game']>
+    }
+    v.id = 'g-gate3'
+    v.game.pending_recap = { ...pendingRecap, tricks: null }
+    renderWithClient(<GameTable view={v} />)
+    expect(screen.getByLabelText('Round 1 complete')).toBeTruthy()
   })
 })

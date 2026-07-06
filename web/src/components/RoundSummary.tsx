@@ -54,23 +54,27 @@ export function RoundSummary({ summary, players, canContinue, myTurnToBid, onCon
           ))}
         </tbody>
       </table>
-      {summary.tricks != null && summary.tricks.length > 0 && (
-        <div className="mt-2">
-          <p className="m-0 text-[0.6rem] font-bold uppercase tracking-widest text-mute">
-            Tricks
-          </p>
-          {summary.tricks.map((trick, i) => (
-            <div key={i} className="mt-0.5 flex items-center gap-1.5">
-              <TrickChips trick={trick} />
+      {(() => {
+        // Only the round's final trick — earlier tricks stay hidden
+        // (remembering them is part of the game).
+        const final = summary.tricks?.at(-1)
+        if (!final) return null
+        return (
+          <div className="mt-2">
+            <p className="m-0 text-[0.6rem] font-bold uppercase tracking-widest text-mute">
+              Final trick
+            </p>
+            <div className="mt-0.5 flex items-center gap-1.5">
+              <TrickChips trick={final} />
               <span className="max-w-28 truncate text-[0.68rem] font-semibold text-mute">
-                {players.find((p) => p.seat === trick.winner)?.display_name ??
-                  `seat ${trick.winner}`}{' '}
+                {players.find((p) => p.seat === final.winner)?.display_name ??
+                  `seat ${final.winner}`}{' '}
                 took it
               </span>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        )
+      })()}
       {nextDealerLine && <p className="modal__note muted">{nextDealerLine}</p>}
       {myTurnToBid && <p className="modal__note">You’re up to bid next</p>}
       {canContinue ? (

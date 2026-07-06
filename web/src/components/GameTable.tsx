@@ -8,7 +8,7 @@ import { seatLayout, type SeatLayoutMode } from '../lib/seatLayout'
 import { useGameEvents } from '../lib/sse'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { ActionDock } from './ActionDock'
-import { TricksPanel } from './TricksPanel'
+import { LastTrickPanel } from './TricksPanel'
 import { RoundSummary } from './RoundSummary'
 import { Scoreboard } from './Scoreboard'
 import { TableMenu } from './TableMenu'
@@ -25,6 +25,12 @@ const AUTO_DEAL_MS = 15000
  *  animation starts on its own after a beat (client-side only: the server
  *  has already dealt, so there is nothing to wait for). */
 const WATCH_DEAL_MS = 1200
+
+/** How long the round's final showdown holds the felt before the recap
+ *  replaces it — without this beat the recap lands the instant the last
+ *  card does, and nobody sees who took the final trick. Client-side only:
+ *  the server gate is already up; we're just staging what it shows. */
+const FINAL_TRICK_LINGER_MS = 4000
 
 const dealtKey = (id: string) => `hearts:dealt:${id}`
 
@@ -100,6 +106,26 @@ export function GameTable({ view }: { view: GameView }) {
   const recap = engine?.pending_recap ?? null
   const gateOpen = pendingAck != null
   const isHost = me?.is_creator === true
+
+  // The round-end beat: let the final trick's showdown linger before the
+  // recap takes the felt. A reload mid-gate restarts the beat — harmless.
+  const finale = recap?.tricks?.at(-1) ?? null
+  const [finaleDone, setFinaleDone] = useState(false)
+  useEffect(() => {
+    if (!gateOpen) {
+      setFinaleDone(false)
+      return
+    }
+    if (finale == null) {
+      setFinaleDone(true)
+      return
+    }
+    const t = setTimeout(() => setFinaleDone(true), FINAL_TRICK_LINGER_MS)
+    return () => clearTimeout(t)
+    // Keyed on the gate, not the recap object: refetches of the same held
+    // round must not restart the beat.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gateOpen, pendingAck])
 
   const continueMutation = useMutation({
     mutationFn: (id: string) => api.continueGame(id),
@@ -216,7 +242,11 @@ export function GameTable({ view }: { view: GameView }) {
             </div>
           ))}
 
-          {gateOpen && recap ? (
+          {gateOpen && recap && !finaleDone ? (
+            // The final showdown gets its beat on the felt before the
+            // recap covers it.
+            <TrickArea view={view} nameBySeat={nameBySeat} finale={finale} />
+          ) : gateOpen && recap ? (
             // Round-end recap gate: the table parks here for everyone until
             // the host acknowledges it. Takes precedence over the deal gate
             // (the next round is already dealt server-side; we just hold the
@@ -255,7 +285,7 @@ export function GameTable({ view }: { view: GameView }) {
           )}
 
           {!gateOpen && !needsDeal && engine.phase === 'Playing' && (
-            <TricksPanel tricks={round?.tricks ?? []} nameBySeat={nameBySeat} />
+            <LastTrickPanel tricks={round?.tricks ?? []} nameBySeat={nameBySeat} />
           )}
         </section>
 
