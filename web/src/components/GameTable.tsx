@@ -231,7 +231,7 @@ export function GameTable({ view }: { view: GameView }) {
 
         {/* The felt. Position-only transforms live on seat/play wrappers —
             never on this surface — so GSAP Flip's coordinate math holds. */}
-        <section className="relative min-h-0 flex-1 rounded-[2.5rem] border-4 border-ink bg-felt shadow-[inset_0_0_0_8px_var(--color-felt-deep),6px_6px_0_0_var(--color-ink)]">
+        <section className="table__felt relative min-h-0 flex-1 rounded-[2.5rem] border-4 border-ink bg-felt shadow-[inset_0_0_0_8px_var(--color-felt-deep),6px_6px_0_0_var(--color-ink)]">
           {placements.map((pl) => (
             <div
               key={pl.seat}
@@ -251,7 +251,7 @@ export function GameTable({ view }: { view: GameView }) {
             // the host acknowledges it. Takes precedence over the deal gate
             // (the next round is already dealt server-side; we just hold the
             // reveal). Centered like the deal gate so Flip's math holds.
-            <div className="absolute left-1/2 top-1/2 z-20 flex w-[min(92%,24rem)] -translate-x-1/2 -translate-y-1/2 flex-col">
+            <div className="absolute left-1/2 top-1/2 z-20 flex max-h-[94%] w-[min(92%,24rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-auto">
               <RoundSummary
                 summary={recap}
                 players={view.players}
@@ -293,7 +293,7 @@ export function GameTable({ view }: { view: GameView }) {
             confirm button). The felt above is a plain flex-1 sibling, so it
             keeps one constant height across deal/bid/play instead of
             growing or shrinking as this content comes and goes. */}
-        <div className="flex min-h-64 shrink-0 flex-col items-center justify-center gap-2">
+        <div className="table__dock flex min-h-64 shrink-0 flex-col items-center justify-center gap-2">
           {!needsDeal && !myTurn && activeSeat != null && (
             <p className="m-0 text-center text-sm font-semibold text-mute">
               {nameBySeat(activeSeat)} to {engine.next?.action}

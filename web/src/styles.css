@@ -508,6 +508,11 @@
 }
 .hand__row .card {
   margin-left: -22px;
+  /* Never squish: `.card` sets `overflow: hidden`, which zeroes a flex
+     item's automatic minimum size, so without this the fan compresses the
+     cards into unreadable slivers instead of ever letting the row's
+     `overflow-x: auto` scroll. */
+  flex-shrink: 0;
 }
 .hand__row .card:first-child {
   margin-left: 0;
@@ -739,6 +744,44 @@
   }
   .hand__row .card {
     margin-left: -12px;
+  }
+}
+
+/* ── Short landscape (tablets and phones on their side) ─────────────────
+   Stacking bar / felt / dock vertically starves the felt on these screens:
+   the dock's fixed footprint eats most of the height, the felt collapses
+   to a strip, and seats, trick and hand all pile on top of each other
+   while half the width sits empty. Split the width instead: felt on the
+   left, the action dock as a right-hand column with the hand wrapping
+   into rows. */
+@media (min-width: 560px) and (max-height: 560px) {
+  .table__main {
+    display: grid;
+    grid-template-areas:
+      'bar bar'
+      'felt dock';
+    grid-template-columns: minmax(0, 1fr) min(24rem, 44%);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .table__bar {
+    grid-area: bar;
+  }
+  .table__felt {
+    grid-area: felt;
+  }
+  .table__dock {
+    grid-area: dock;
+    /* The stacked layout's reserved dock height (min-h-64) would overflow
+       a pane this short; let the column size itself and scroll if the
+       bid chips + hand + confirm stack ever outgrows it. `safe` keeps the
+       top reachable when it does. */
+    min-height: 0;
+    overflow-y: auto;
+    justify-content: safe center;
+  }
+  .hand__row {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
   }
 }
 
