@@ -666,18 +666,28 @@
   bottom: calc(100% + 8px);
   transform: translateX(-50%);
   z-index: 20;
-  max-width: 12rem;
+  /* An explicit, viewport-proportional width — NOT shrink-to-fit. The bubble's
+     containing block is the ~4.6rem seat wrapper, so without this its width
+     collapsed against that tiny box and, with `anywhere`, wrapped one
+     character per line on small/zoomed phones. `min(…, 13rem)` scales it to
+     the screen while capping it on wide displays; content shorter than the
+     width still shrinks via `max-content`. */
+  width: min(56vw, 13rem);
+  max-width: max-content;
   padding: 0.35rem 0.6rem;
   background: var(--color-paper);
   color: var(--color-ink);
   border: 2px solid var(--color-ink);
   border-radius: 0.7rem;
   box-shadow: var(--shadow-hard-sm);
-  font-size: 0.8rem;
+  /* Text scales with screen width between sane bounds (the reported ask). */
+  font-size: clamp(0.72rem, 3vw, 0.85rem);
   font-weight: 600;
   line-height: 1.25;
   text-align: center;
-  overflow-wrap: anywhere;
+  /* Break only over-long words (URLs), not every character. */
+  overflow-wrap: break-word;
+  word-break: normal;
   pointer-events: none;
   animation: pop-in 0.22s ease;
 }
@@ -702,11 +712,12 @@
   border-bottom-color: var(--color-ink);
 }
 .seat-bubble--react {
+  width: auto;
   background: transparent;
   border: none;
   box-shadow: none;
   padding: 0;
-  font-size: 1.7rem;
+  font-size: clamp(1.35rem, 6vw, 1.9rem);
 }
 .seat-bubble--react::after {
   display: none;
