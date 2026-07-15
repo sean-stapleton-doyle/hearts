@@ -1,6 +1,7 @@
 target/
 node_modules/
 /graphify-out
+web/graphify-out/
 .env
 # `hearts-server` writes rolling daily logs to `logs/` in its CWD
 # (tracing_appender::rolling::daily). Match anywhere so logs never slip in

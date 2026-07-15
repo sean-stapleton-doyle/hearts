@@ -31,6 +31,9 @@ pub fn router(state: AppState, cors_allowed_origins: &[String]) -> Router {
         // rejects conflicting captures at the same position. Join takes an
         // invite code here, the others take a game id.
         .route("/games/{game}", get(lobby::show))
+        // Joinability probe by invite code — its own top-level path so the
+        // `{code}` capture never collides with the `{game}` subtree above.
+        .route("/invite/{code}", get(lobby::invite_status))
         .route("/games/{game}/join", post(lobby::join))
         .route("/games/{game}/start", post(lobby::start))
         .route("/games/{game}/bid", post(gameplay::bid))

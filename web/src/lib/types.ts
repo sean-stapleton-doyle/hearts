@@ -129,6 +129,17 @@ export const EngineViewSchema = z.object({
 })
 export type EngineView = z.infer<typeof EngineViewSchema>
 
+/** A joinability probe by invite code (GET /invite/{code}) — lets the join
+ *  page render the right state on load instead of only learning a game is
+ *  unjoinable after a failed join. `seated` means this session already holds a
+ *  seat (so it should enter, not join). */
+export const GameJoinStatusSchema = z.object({
+  status: GameStatusSchema,
+  seated: z.boolean(),
+  full: z.boolean(),
+})
+export type GameJoinStatus = z.infer<typeof GameJoinStatusSchema>
+
 export const GameViewSchema = z.object({
   id: z.string(),
   invite_code: z.string(),
@@ -227,9 +238,14 @@ export type RoundCompletedEnvelope = z.infer<typeof RoundCompletedEnvelopeSchema
  *  SSE events — the finished GET view has no engine section, so this is
  *  the only place the result exists client-side. Never crosses the wire
  *  in this shape (the events do, and they're schema-parsed), so a plain
- *  type suffices. */
+ *  type suffices.
+ *
+ *  `finalTrick` is the game's last showdown, reconstructed from the event
+ *  stream (the final round is exempt from the recap gate, so it never rides
+ *  a view). Null on a fresh load of an already-finished game, where the
+ *  stream never opens — the finished screen skips the reveal then. */
 export type GameOutcome =
-  | { kind: 'over'; scores: number[]; winners: number[] }
+  | { kind: 'over'; scores: number[]; winners: number[]; finalTrick: CompletedTrickView | null }
   | { kind: 'abandoned'; reason: string }
 
 export const CreatedSessionSchema = z.object({

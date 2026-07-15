@@ -20,6 +20,7 @@ import {
   AccountInfoSchema,
   ActionAckSchema,
   CreatedSessionSchema,
+  GameJoinStatusSchema,
   GameViewSchema,
   MeInfoSchema,
   MyGamesSchema,
@@ -30,6 +31,7 @@ import {
   type ActionAck,
   type Card,
   type EventsTicket,
+  type GameJoinStatus,
   type GameView,
   type MeInfo,
   type MyGames,
@@ -176,6 +178,16 @@ export const api = {
     return authedRequest('POST', `/games/${encodeURIComponent(code)}/join`, GameViewSchema, {
       display_name: displayName,
     })
+  },
+
+  /** Probe a game's joinability by invite code, so the join page can render
+   *  the right state on load. Throws `game_not_found` for a bad code. */
+  getJoinStatus(code: string): Promise<GameJoinStatus> {
+    return authedRequest(
+      'GET',
+      `/invite/${encodeURIComponent(code)}`,
+      GameJoinStatusSchema,
+    )
   },
 
   startGame(id: string): Promise<GameView> {

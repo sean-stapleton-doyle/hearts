@@ -3,11 +3,47 @@ import { useQueryClient } from '@tanstack/react-query'
 
 import { API_BASE, api } from './api'
 import { gameKeys } from './query'
-import { GameEventEnvelopeSchema, type GameOutcome, type RoundCompletedEnvelope } from './types'
+import {
+  GameEventEnvelopeSchema,
+  type CompletedTrickView,
+  type GameEvent,
+  type GameOutcome,
+  type PlayView,
+  type RoundCompletedEnvelope,
+} from './types'
 
 /** Reconnect backoff: doubles from 1s, capped at 10s. */
 const RETRY_BASE_MS = 1000
 const RETRY_MAX_MS = 10_000
+
+/** Running state for reconstructing the game's final trick from the event
+ *  stream. The final round is exempt from the recap gate (the server jumps
+ *  straight to GameOver), so its last showdown never rides a fetched view —
+ *  we rebuild it from `card_played`/`trick_completed` events so the finished
+ *  screen can reveal it. Pure and exported so it can be tested without a live
+ *  EventSource; folding the replayed log on reconnect yields the same trick,
+ *  so it stays idempotent. */
+export interface TrickAccumulator {
+  plays: PlayView[]
+  last: CompletedTrickView | null
+}
+
+export const emptyTrickAccumulator = (): TrickAccumulator => ({ plays: [], last: null })
+
+export function accumulateTrick(acc: TrickAccumulator, event: GameEvent): TrickAccumulator {
+  if (event.type === 'card_played') {
+    return { ...acc, plays: [...acc.plays, { seat: event.seat, card: event.card }] }
+  }
+  if (event.type === 'trick_completed') {
+    // The leader is whoever played first this trick.
+    const last =
+      acc.plays.length > 0
+        ? { leader: acc.plays[0].seat, plays: acc.plays, winner: event.winner }
+        : acc.last
+    return { plays: [], last }
+  }
+  return acc
+}
 
 /**
  * Subscribe to a game's SSE event log and keep the TanStack Query cache in
@@ -38,6 +74,11 @@ export function useGameEvents(gameId: string | undefined): void {
     let retryTimer: ReturnType<typeof setTimeout> | undefined
     let attempt = 0
 
+    // Accumulates the running trick so we can reconstruct the game's final
+    // showdown (see `accumulateTrick`). Reset when the effect re-runs; the
+    // reconnect replay re-derives the same trick.
+    let trick = emptyTrickAccumulator()
+
     const onMessage = (event: MessageEvent) => {
       // Any event means the view moved — invalidate before parsing so even
       // a payload this client can't decode (e.g. an event type added by a
@@ -57,6 +98,9 @@ export function useGameEvents(gameId: string | undefined): void {
         return // unknown/drifted event shape — degrade to the refetch
       }
       const envelope = parsed.data
+      // Track the running trick so we can reconstruct the game's final
+      // showdown (see `accumulateTrick`).
+      trick = accumulateTrick(trick, envelope)
       if (envelope.type === 'round_completed') {
         // Accumulate the per-round history for the scoreboard and the
         // round-end recap overlay. Replayed and duplicate events just
@@ -72,7 +116,12 @@ export function useGameEvents(gameId: string | undefined): void {
       if (envelope.type === 'game_over' || envelope.type === 'game_abandoned') {
         const outcome: GameOutcome =
           envelope.type === 'game_over'
-            ? { kind: 'over', scores: envelope.scores, winners: envelope.winners }
+            ? {
+                kind: 'over',
+                scores: envelope.scores,
+                winners: envelope.winners,
+                finalTrick: trick.last,
+              }
             : { kind: 'abandoned', reason: envelope.reason }
         queryClient.setQueryData(gameKeys.result(id), outcome)
         done = true

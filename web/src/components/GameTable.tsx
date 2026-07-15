@@ -1,5 +1,6 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 
 import { api } from '../lib/api'
 import { runDealAnimation, useFlipLayout } from '../lib/anim'
@@ -7,6 +8,7 @@ import { gameKeys } from '../lib/query'
 import { seatNamer } from '../lib/players'
 import { seatLayout, type SeatLayoutMode } from '../lib/seatLayout'
 import { useGameEvents } from '../lib/sse'
+import { useCountdown } from '../hooks/useCountdown'
 import { useDealGate } from '../hooks/useDealGate'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { ActionDock } from './ActionDock'
@@ -22,6 +24,49 @@ import type { GameView } from '../lib/types'
  *  card does, and nobody sees who took the final trick. Client-side only:
  *  the server gate is already up; we're just staging what it shows. */
 const FINAL_TRICK_LINGER_MS = 4000
+
+/** Seconds left on your own clock at which we fire the timeout warning —
+ *  below the countdown ring's `is-low` (≤30s) so it reads as more urgent. */
+const TIMEOUT_WARN_SECS = 20
+
+/**
+ * Fires the two turn-related toasts, isolated in its own component so its
+ * hooks only run once the engine exists (the parent bails with `return null`
+ * before its turn state is computed). Renders nothing.
+ *
+ * Both toasts are guarded by `turnKey` so they fire at most once per turn:
+ * a "your turn" nudge when the turn hands to you, and a warning when your own
+ * clock runs low. Fixed toast ids keep repeats from stacking.
+ */
+function TurnAlerts({
+  myTurn,
+  action,
+  turnKey,
+  deadlineInSecs,
+}: {
+  myTurn: boolean
+  action: 'bid' | 'play' | null
+  turnKey: string
+  deadlineInSecs: number
+}) {
+  const nudged = useRef<string | null>(null)
+  useEffect(() => {
+    if (!myTurn || nudged.current === turnKey) return
+    nudged.current = turnKey
+    toast(`Your turn to ${action ?? 'play'}`, { id: 'your-turn' })
+  }, [myTurn, turnKey, action])
+
+  const remaining = useCountdown(myTurn ? deadlineInSecs : undefined)
+  const warned = useRef<string | null>(null)
+  useEffect(() => {
+    if (!myTurn || remaining == null || remaining > TIMEOUT_WARN_SECS) return
+    if (warned.current === turnKey) return
+    warned.current = turnKey
+    toast.warning("You're about to run out of time!", { id: 'timeout-warn' })
+  }, [myTurn, remaining, turnKey])
+
+  return null
+}
 
 /**
  * The round-end beat: hold the felt on the final showdown for a moment
@@ -54,6 +99,16 @@ export function GameTable({ view }: { view: GameView }) {
   const scope = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
   const [scoresOpen, setScoresOpen] = useState(false)
+
+  // Escape closes the mobile scores sheet, matching the backdrop tap.
+  useEffect(() => {
+    if (!scoresOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setScoresOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [scoresOpen])
 
   const engine = view.game
   const round = engine?.round ?? null
@@ -119,7 +174,11 @@ export function GameTable({ view }: { view: GameView }) {
   const myTurn = legalBids != null || legalPlays != null
   const nameBySeat = seatNamer(view.players)
   const activeSeat = engine.next?.seat
-  const turnKey = `${engine.round_index}:${engine.next?.seat ?? '-'}:${engine.next?.action ?? '-'}`
+  // Include the completed-trick count so a trick winner leading back-to-back
+  // tricks — same round, seat, and action — still gets a fresh key, clearing
+  // ActionDock's stale selection (otherwise the confirm button stays lit on a
+  // card that's already been played).
+  const turnKey = `${engine.round_index}:${round?.tricks.length ?? 0}:${engine.next?.seat ?? '-'}:${engine.next?.action ?? '-'}`
 
   const stage: FeltStage =
     gateOpen && recap && finale && !finaleDone
@@ -158,6 +217,12 @@ export function GameTable({ view }: { view: GameView }) {
 
   return (
     <div className="table" ref={scope}>
+      <TurnAlerts
+        myTurn={myTurn}
+        action={engine.next?.action ?? null}
+        turnKey={turnKey}
+        deadlineInSecs={engine.turn_deadline_in_secs}
+      />
       {/* Wide screens: the score history lives here; the sheet is mobile-only. */}
       <aside className="table__scores-panel">
         <Scoreboard view={view} />
@@ -244,6 +309,9 @@ export function GameTable({ view }: { view: GameView }) {
           <div className="sheet-backdrop" onClick={() => setScoresOpen(false)} />
           <div className="sheet">
             <Scoreboard view={view} onClose={() => setScoresOpen(false)} />
+            <button type="button" className="sheet__close" onClick={() => setScoresOpen(false)}>
+              Close scores
+            </button>
           </div>
         </>
       )}

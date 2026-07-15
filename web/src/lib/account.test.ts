@@ -54,9 +54,18 @@ describe('joinErrorMessage', () => {
     )
   })
 
+  it('maps the stale-game join codes to friendly reasons', () => {
+    const started = { kind: 'server', status: 409, code: 'not_joinable', message: 'raw' }
+    const full = { kind: 'server', status: 409, code: 'game_full', message: 'raw' }
+    const missing = { kind: 'server', status: 404, code: 'game_not_found', message: 'raw' }
+    expect(joinErrorMessage(started, 'fallback')).toBe('This game has already started.')
+    expect(joinErrorMessage(full, 'fallback')).toBe('This game is full (7 players).')
+    expect(joinErrorMessage(missing, 'fallback')).toBe('No game with that code.')
+  })
+
   it('passes through other server messages and falls back otherwise', () => {
-    const full = { kind: 'server', status: 409, code: 'game_full', message: 'this game is full' }
-    expect(joinErrorMessage(full, 'fallback')).toBe('this game is full')
+    const other = { kind: 'server', status: 409, code: 'some_other_code', message: 'raw server text' }
+    expect(joinErrorMessage(other, 'fallback')).toBe('raw server text')
     expect(joinErrorMessage(new Error('boom'), 'fallback')).toBe('fallback')
   })
 })

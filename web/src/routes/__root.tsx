@@ -3,6 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { Outlet, createRootRouteWithContext, useMatches } from '@tanstack/react-router'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
+import { Toaster } from 'sonner'
 
 import { ensureSession } from '../lib/api'
 import { queryClient } from '../lib/query'
@@ -33,6 +34,9 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {!inGame && <NavBar />}
       <Outlet />
+      {/* Turn nudges and timeout warnings (GameTable). Top-center so it reads
+          over the felt on mobile without covering the hand at the bottom. */}
+      <Toaster position="top-center" richColors toastOptions={{ className: 'app-toast' }} />
       {/* Dev-only: `import.meta.env.DEV` is statically false in production
           builds, so the devtools JSX (and its imports) are tree-shaken out
           of the bundle entirely. */}

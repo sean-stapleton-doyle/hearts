@@ -284,11 +284,15 @@
     background: var(--color-paper);
     box-shadow: var(--shadow-hard-sm);
     overflow: hidden;
+    /* Deliberately no `margin` here: the fan overlap IS a negative margin
+       (see `.hand__row .card`), and GSAP Flip lifts cards out of flow
+       (`absolute: true`) during layout changes. Animating margin made the fan
+       visibly spread apart and slide back together on every hand change as the
+       cards returned to flow. Layout margins must snap, not tween. */
     transition:
       box-shadow 0.2s ease,
       opacity 0.2s ease,
-      filter 0.2s ease,
-      margin 0.15s ease;
+      filter 0.2s ease;
   }
   .card--sm {
     --card-w: 46px;
@@ -577,6 +581,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* ── Toasts (sonner) ──────────────────────────────────────────────────────
+   Turn nudge + timeout warning. Match the app's display type; sonner's
+   richColors handles the semantic (amber) warning tint. */
+.app-toast {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
 /* ── Scoreboard sheet ─────────────────────────────────────────────────── */
 /* Overlay stacking: table content (incl. z-indexed tricks cards) < deal
    layer (30) < sheet/backdrop (40) < modal (50). */
@@ -596,14 +608,43 @@
   border-top: 2px solid var(--color-ink);
   border-top-left-radius: 1.1rem;
   border-top-right-radius: 1.1rem;
-  padding: 0.5rem 1rem calc(1rem + env(safe-area-inset-bottom));
+  padding: 0 1rem calc(1rem + env(safe-area-inset-bottom));
   animation: sheet-up 0.25s ease;
+  /* Cap the height and scroll inside: a long score history (or a zoomed-in
+     viewport) used to grow the sheet up past the top of the screen, carrying
+     the close control off-screen with no way back to it. */
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .scoreboard__bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0.5rem 0;
+}
+/* Keep the close (✕) pinned while the sheet body scrolls. */
+.sheet .scoreboard__bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--paper);
+}
+/* The always-reachable dedicated close button at the foot of the sheet. */
+.sheet__close {
+  position: sticky;
+  bottom: 0;
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.7rem;
+  font-family: var(--font-display);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 2px solid var(--color-ink);
+  border-radius: 0.6rem;
+  background: var(--color-paper);
+  box-shadow: var(--shadow-hard-sm);
 }
 .scoreboard h3,
 .modal__panel h3 {
@@ -791,6 +832,14 @@
   .hand__row {
     flex-wrap: wrap;
     row-gap: 0.5rem;
+    column-gap: 0.25rem;
+  }
+  /* Fanning with a negative margin breaks once the row wraps: only the whole
+     row's first child gets the margin reset, so the first card of every
+     wrapped line is yanked 22px left. Drop the overlap and use a flat gap
+     instead when we're wrapping. */
+  .hand__row .card {
+    margin-left: 0;
   }
 }
 

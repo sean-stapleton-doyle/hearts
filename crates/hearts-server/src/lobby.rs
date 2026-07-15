@@ -273,6 +273,49 @@ pub async fn show(
     Ok(Json(view))
 }
 
+/// `GET /invite/{code}` — a lightweight joinability probe by invite code, so
+/// the join page can render the right state on load instead of only learning
+/// a game is unjoinable after a failed `POST …/join`. Returns the game's
+/// `status`, whether this session is already `seated`, and whether it's
+/// `full`. Rate-limited like `join` to blunt code scanning; a `game_not_found`
+/// mirrors the join handler so a bad code reads the same either way.
+pub async fn invite_status(
+    State(state): State<AppState>,
+    session: Session,
+    ClientIp(ip): ClientIp,
+    Path(code): Path<String>,
+) -> Result<impl IntoResponse, ApiError> {
+    state.rate_limiter.check("invite_status", ip, 40, std::time::Duration::from_secs(300))?;
+    let invite_code = code.trim().to_uppercase();
+
+    let game: Option<(Uuid, GameStatus)> =
+        sqlx::query_as("SELECT id, status FROM games WHERE invite_code = $1")
+            .bind(&invite_code)
+            .fetch_optional(&state.pool)
+            .await?;
+    let (game_id, status) = game
+        .ok_or_else(|| ApiError::not_found("game_not_found", "no game with that invite code"))?;
+
+    let seated: Option<(i32,)> = sqlx::query_as(
+        "SELECT seat FROM game_players WHERE game_id = $1 AND session_token = $2",
+    )
+    .bind(game_id)
+    .bind(session.token_hash.as_slice())
+    .fetch_optional(&state.pool)
+    .await?;
+    let seated_count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM game_players WHERE game_id = $1")
+            .bind(game_id)
+            .fetch_one(&state.pool)
+            .await?;
+
+    Ok(Json(json!({
+        "status": status,
+        "seated": seated.is_some(),
+        "full": seated_count >= hearts_core::MAX_PLAYERS as i64,
+    })))
+}
+
 /// Build the game view for `session`, or 404 — non-members get the same
 /// response as a missing game so game ids don't leak membership.
 async fn game_view(

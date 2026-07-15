@@ -16,11 +16,22 @@ export function useDefaultDisplayName(setName: (update: (current: string) => str
   }, [user, setName])
 }
 
-/** Friendly message for a failed create/join, keyed on the error code. */
+/** Friendly message for a failed create/join, keyed on the error code. The
+ *  join page probes joinability up front, but a game can still go stale
+ *  between the probe and the click (or the code is typed straight into
+ *  `/play`), so map the join-specific codes here too. */
 export function joinErrorMessage(error: unknown, fallback: string): string {
-  if (!isApiError(error)) return fallback
-  if (error.kind === 'server' && error.code === 'name_taken') {
-    return 'That name is already taken in this game — pick another.'
+  if (!isApiError(error) || error.kind !== 'server') return fallback
+  switch (error.code) {
+    case 'name_taken':
+      return 'That name is already taken in this game — pick another.'
+    case 'not_joinable':
+      return 'This game has already started.'
+    case 'game_full':
+      return 'This game is full (7 players).'
+    case 'game_not_found':
+      return 'No game with that code.'
+    default:
+      return error.message
   }
-  return error.message
 }
