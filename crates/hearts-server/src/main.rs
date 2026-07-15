@@ -1,4 +1,5 @@
 mod account;
+mod chat;
 mod config;
 mod error;
 mod gameplay;

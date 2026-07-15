@@ -17,6 +17,7 @@ use tower_http::trace::TraceLayer;
 const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-request-id");
 
 use crate::account;
+use crate::chat;
 use crate::gameplay;
 use crate::lobby;
 use crate::session;
@@ -38,6 +39,7 @@ pub fn router(state: AppState, cors_allowed_origins: &[String]) -> Router {
         .route("/games/{game}/start", post(lobby::start))
         .route("/games/{game}/bid", post(gameplay::bid))
         .route("/games/{game}/play", post(gameplay::play))
+        .route("/games/{game}/chat", post(chat::send).get(chat::history))
         .route("/games/{game}/continue", post(gameplay::continue_game))
         .route("/games/{game}/end", post(gameplay::end_game))
         .route("/games/{game}/events", get(gameplay::events))

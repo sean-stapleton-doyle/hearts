@@ -171,6 +171,25 @@ export const RoundCompletedSchema = z.object({
   next,
 })
 
+export const ChatKindSchema = z.enum(['text', 'react'])
+export type ChatKind = z.infer<typeof ChatKindSchema>
+
+/** A chat message, shared by the SSE `chat_message` event and the history GET.
+ *  `id` is a globally monotonic row id the client dedups on — a reconnect
+ *  replays the message over SSE while the history fetch returns the same row,
+ *  so keying by `id` keeps it idempotent. `kind` splits speech (`text`: bubble
+ *  + scrollback log) from reactions (`react`: a floating emoji kept out of the
+ *  log). `sent_at` is RFC3339. */
+export const ChatMessageSchema = z.object({
+  id: z.number().int(),
+  seat,
+  kind: ChatKindSchema,
+  name: z.string(),
+  body: z.string(),
+  sent_at: z.string(),
+})
+export type ChatMessage = z.infer<typeof ChatMessageSchema>
+
 export const GameEventSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('game_started'),
@@ -216,8 +235,12 @@ export const GameEventSchema = z.discriminatedUnion('type', [
     next,
   }),
   z.object({ type: z.literal('game_abandoned'), reason: z.string() }),
+  ChatMessageSchema.extend({ type: z.literal('chat_message') }),
 ])
 export type GameEvent = z.infer<typeof GameEventSchema>
+
+/** Response shape of `GET /games/{id}/chat`. */
+export const ChatHistorySchema = z.object({ messages: z.array(ChatMessageSchema) })
 
 /** A parsed SSE `data:` payload: the event plus its log position. */
 export const GameEventEnvelopeSchema = GameEventSchema.and(

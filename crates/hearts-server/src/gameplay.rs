@@ -117,6 +117,39 @@ pub enum GameEvent {
     GameAbandoned {
         reason: String,
     },
+    /// A player's chat message. Rides the same broadcast/log as game events
+    /// but changes no game state; persisted to `chat_messages`, so it carries
+    /// the row `id` (globally monotonic) that clients dedup on — the in-memory
+    /// log replays it over SSE while the history GET returns the same row.
+    /// `sent_at` is the row's `created_at` as RFC3339. See `chat.rs`.
+    ChatMessage {
+        id: i64,
+        seat: usize,
+        kind: ChatKind,
+        name: String,
+        body: String,
+        sent_at: String,
+    },
+}
+
+/// What a chat message *is*, so the client can render reactions differently
+/// from speech. `Text` shows as a bubble and lands in the scrollback log;
+/// `React` floats a transient emoji over the seat and stays out of the log.
+/// Stored as text in `chat_messages.kind`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatKind {
+    Text,
+    React,
+}
+
+impl ChatKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ChatKind::Text => "text",
+            ChatKind::React => "react",
+        }
+    }
 }
 
 /// Who acts next, and how.
@@ -665,7 +698,7 @@ fn pending_recap_json(active: &ActiveGame) -> serde_json::Value {
 }
 
 /// Look up a running game, with a precise error when it is not running.
-async fn active_entry(
+pub(crate) async fn active_entry(
     state: &AppState,
     game_id: Uuid,
 ) -> Result<std::sync::Arc<tokio::sync::Mutex<ActiveGame>>, ApiError> {
@@ -686,7 +719,7 @@ async fn active_entry(
     })
 }
 
-fn seat_of_member(active: &ActiveGame, session: &Session) -> Result<usize, ApiError> {
+pub(crate) fn seat_of_member(active: &ActiveGame, session: &Session) -> Result<usize, ApiError> {
     active
         .seat_of(session.token_hash.as_slice())
         .ok_or_else(|| ApiError::not_found("game_not_found", "no such game"))

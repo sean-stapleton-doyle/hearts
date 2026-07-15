@@ -654,6 +654,188 @@
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
+
+/* ── In-game chat ─────────────────────────────────────────────────────── */
+/* A message that pops over a seat and fades (SeatBubble.tsx). Absolute over
+   the seat's placement wrapper, centered, never intercepting clicks. `text`
+   is a paper speech bubble with an ink tail; `react` is a bare, larger emoji
+   with no chrome. `--below` flips it under top-of-felt seats. */
+.seat-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  z-index: 20;
+  max-width: 12rem;
+  padding: 0.35rem 0.6rem;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  border: 2px solid var(--color-ink);
+  border-radius: 0.7rem;
+  box-shadow: var(--shadow-hard-sm);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  animation: pop-in 0.22s ease;
+}
+/* Speech tail, pointing down at the seat. */
+.seat-bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--color-ink);
+}
+.seat-bubble--below {
+  bottom: auto;
+  top: calc(100% + 8px);
+}
+.seat-bubble--below::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: var(--color-ink);
+}
+.seat-bubble--react {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  font-size: 1.7rem;
+}
+.seat-bubble--react::after {
+  display: none;
+}
+
+/* The Chat toggle's unread dot (the button carries `relative`). */
+.table__chat-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-trump);
+  border: 1px solid var(--color-ink);
+}
+
+/* The chat tray reuses the scores sheet's chrome (fixed bottom, sticky bar,
+   foot close button) but pins its height and lets the log scroll inside so
+   the composer stays reachable. */
+.sheet.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  height: min(70dvh, 34rem);
+  overflow: hidden;
+}
+.chat__bar h3 {
+  margin: 0;
+}
+.chat__x {
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--color-ink);
+}
+.chat__log {
+  flex: 1;
+  min-height: 4rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.25rem 0;
+}
+.chat__empty {
+  margin: auto;
+  color: var(--color-mute);
+  font-size: 0.85rem;
+}
+.chat__msg {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.chat__who {
+  font-family: var(--font-display);
+  font-weight: 800;
+}
+.chat__reacts,
+.chat__phrases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.chat__react,
+.chat__phrase {
+  border: 2px solid var(--color-ink);
+  border-radius: 0.5rem;
+  background: var(--color-paper);
+  box-shadow: var(--shadow-hard-sm);
+  cursor: pointer;
+  line-height: 1;
+}
+.chat__react {
+  padding: 0.25rem 0.4rem;
+  font-size: 1.15rem;
+}
+.chat__phrase {
+  padding: 0.3rem 0.55rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.chat__compose {
+  display: flex;
+  gap: 0.4rem;
+}
+.chat__input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.6rem;
+  border: 2px solid var(--color-ink);
+  border-radius: 0.5rem;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-size: 0.9rem;
+}
+.chat__send {
+  padding: 0.5rem 0.8rem;
+  border: 2px solid var(--color-ink);
+  border-radius: 0.5rem;
+  background: var(--color-trump);
+  color: #fff;
+  box-shadow: var(--shadow-hard-sm);
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.chat__react:disabled,
+.chat__phrase:disabled,
+.chat__send:disabled,
+.chat__input:disabled {
+  opacity: 0.5;
+  cursor: default;
+  box-shadow: none;
+}
+.chat__error {
+  margin: 0;
+  color: var(--color-trump);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
 .scoreboard__table {
   width: 100%;
   border-collapse: collapse;

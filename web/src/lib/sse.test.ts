@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
-import { accumulateTrick, emptyTrickAccumulator, type TrickAccumulator } from './sse'
-import type { Card, GameEvent } from './types'
+import { accumulateTrick, emptyTrickAccumulator, mergeChat, type TrickAccumulator } from './sse'
+import type { Card, ChatMessage, GameEvent } from './types'
+
+const msg = (id: number, seat = 0): ChatMessage => ({
+  id,
+  seat,
+  kind: 'text',
+  name: `p${seat}`,
+  body: `m${id}`,
+  sent_at: '2026-07-15T00:00:00Z',
+})
 
 const card = (rank: Card['rank'], suit: Card['suit'] = 'Hearts'): Card => ({ rank, suit })
 
@@ -71,5 +80,34 @@ describe('accumulateTrick', () => {
     ])
     expect(acc.last).toBeNull()
     expect(acc.plays).toEqual([])
+  })
+})
+
+describe('mergeChat', () => {
+  it('appends and keeps the log sorted by id', () => {
+    const merged = [msg(3), msg(1), msg(2)].reduce(mergeChat, [] as ChatMessage[])
+    expect(merged.map((m) => m.id)).toEqual([1, 2, 3])
+  })
+
+  it('dedups by id and returns the same reference on a duplicate (no re-render)', () => {
+    const base = [msg(1), msg(2)]
+    const again = mergeChat(base, msg(2))
+    expect(again).toBe(base)
+  })
+
+  it('is idempotent under a full replay (reconnect)', () => {
+    const log = [msg(1), msg(2), msg(3)]
+    const once = log.reduce(mergeChat, [] as ChatMessage[])
+    const twice = log.reduce(mergeChat, once)
+    expect(twice).toBe(once)
+    expect(twice.map((m) => m.id)).toEqual([1, 2, 3])
+  })
+
+  it('caps the stash at the newest 100, dropping the oldest', () => {
+    const many = Array.from({ length: 150 }, (_, i) => msg(i + 1))
+    const merged = many.reduce(mergeChat, [] as ChatMessage[])
+    expect(merged).toHaveLength(100)
+    expect(merged[0].id).toBe(51)
+    expect(merged[merged.length - 1].id).toBe(150)
   })
 })

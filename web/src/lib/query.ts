@@ -1,6 +1,6 @@
 import { QueryClient, queryOptions } from '@tanstack/react-query'
-import { isApiError } from './api'
-import type { GameOutcome, RoundCompletedEnvelope } from './types'
+import { api, isApiError } from './api'
+import type { ChatMessage, GameOutcome, RoundCompletedEnvelope } from './types'
 
 // The game query cache is the single source of truth for a game's view.
 // Route loaders prime it (ensureQueryData), pages read it (useQuery),
@@ -21,6 +21,11 @@ export const gameKeys = {
   // detail(id) invalidation (SSE bridge, play/bid mutations) prefix-matches
   // children — it would refetch the stash's empty queryFn and wipe the data.
   roundHistory: (id: string) => ['round-history', id] as const,
+  // In-game chat, seeded from the history GET and appended to by the SSE
+  // bridge. A sibling of `detail` (not nested) for the same reason as
+  // `roundHistory`: a `detail(id)` invalidation must not prefix-match and wipe
+  // this active query.
+  chat: (id: string) => ['chat', id] as const,
 }
 
 // ── SSE-fed stashes ─────────────────────────────────────────────────────
@@ -46,6 +51,18 @@ export const gameResultOptions = (id: string) =>
     queryFn: async () => null,
     staleTime: Infinity,
     initialData: null,
+  })
+
+/** Chat log for a game. Unlike the other stashes this has a *real* queryFn —
+ *  chat is persisted, so the history loads on mount; the SSE bridge is the
+ *  only writer thereafter (it appends live messages with `setQueryData`, so
+ *  `staleTime: Infinity` keeps the mount fetch from being refetched over it). */
+export const chatOptions = (id: string) =>
+  queryOptions<ChatMessage[]>({
+    queryKey: gameKeys.chat(id),
+    queryFn: () => api.getChatHistory(id),
+    staleTime: Infinity,
+    initialData: [],
   })
 
 // Account-scoped queries. Invalidate `userKeys.all` after login/register/

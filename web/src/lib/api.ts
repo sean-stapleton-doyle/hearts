@@ -20,6 +20,7 @@ import {
   AccountInfoSchema,
   ActionAckSchema,
   CreatedSessionSchema,
+  ChatHistorySchema,
   GameJoinStatusSchema,
   GameViewSchema,
   MeInfoSchema,
@@ -30,6 +31,8 @@ import {
   type AccountInfo,
   type ActionAck,
   type Card,
+  type ChatKind,
+  type ChatMessage,
   type EventsTicket,
   type GameJoinStatus,
   type GameView,
@@ -225,6 +228,20 @@ export const api = {
    *  the stream URL carries this instead of the session token. */
   createEventsTicket(id: string): Promise<EventsTicket> {
     return authedRequest('POST', `/games/${id}/events-ticket`, EventsTicketSchema)
+  },
+
+  /** Send a chat message (`kind:'text'`) or reaction (`kind:'react'`) to a
+   *  running game. It fans out to every connected client via a `chat_message`
+   *  SSE event; the returned `id` is the row the client dedups on. */
+  sendChat(id: string, kind: ChatKind, body: string): Promise<{ id: number }> {
+    return authedRequest('POST', `/games/${id}/chat`, z.object({ id: z.number() }), { kind, body })
+  },
+
+  /** Chat history for a member, oldest-first. Persisted, so it survives
+   *  reloads and repopulates the log; SSE appends live messages thereafter. */
+  async getChatHistory(id: string): Promise<ChatMessage[]> {
+    const { messages } = await authedRequest('GET', `/games/${id}/chat`, ChatHistorySchema)
+    return messages
   },
 
   // ── Accounts (optional; login binds the current token, no new token) ──

@@ -5,6 +5,7 @@ import { API_BASE, api } from './api'
 import { gameKeys } from './query'
 import {
   GameEventEnvelopeSchema,
+  type ChatMessage,
   type CompletedTrickView,
   type GameEvent,
   type GameOutcome,
@@ -45,6 +46,21 @@ export function accumulateTrick(acc: TrickAccumulator, event: GameEvent): TrickA
   return acc
 }
 
+/** Most recent chat messages held in the stash — older ones scroll out of
+ *  reach anyway, and the history GET can page further back if ever needed. */
+const CHAT_STASH_CAP = 100
+
+/** Append a chat message to the log stash, deduped by `id` and kept sorted by
+ *  `id`. A reconnect replays every `chat_message` over SSE while the history
+ *  GET returns the same rows, so dedup-by-id keeps the merge idempotent;
+ *  returning `prev` unchanged on a duplicate avoids a needless re-render. Pure
+ *  and exported so it can be tested without a live EventSource. */
+export function mergeChat(prev: ChatMessage[], message: ChatMessage): ChatMessage[] {
+  if (prev.some((m) => m.id === message.id)) return prev
+  const next = [...prev, message].sort((a, b) => a.id - b.id)
+  return next.length > CHAT_STASH_CAP ? next.slice(next.length - CHAT_STASH_CAP) : next
+}
+
 /**
  * Subscribe to a game's SSE event log and keep the TanStack Query cache in
  * sync. On each message we invalidate the game query (invalidate-and-refetch,
@@ -79,25 +95,40 @@ export function useGameEvents(gameId: string | undefined): void {
     // reconnect replay re-derives the same trick.
     let trick = emptyTrickAccumulator()
 
+    const invalidate = () => queryClient.invalidateQueries({ queryKey: gameKeys.detail(id) })
+
     const onMessage = (event: MessageEvent) => {
-      // Any event means the view moved — invalidate before parsing so even
-      // a payload this client can't decode (e.g. an event type added by a
-      // newer server) still refreshes the cache. `game_resumed` is handled
-      // implicitly: the refetch returns the rebuilt view, discarding any
-      // local state.
-      queryClient.invalidateQueries({ queryKey: gameKeys.detail(id) })
+      // Parse first so chat — which changes no game state — can skip the game
+      // refetch every other event triggers. The safety net is preserved: any
+      // payload this client can't decode (malformed, or an event type added by
+      // a newer server) falls through to `invalidate()`, so the view still
+      // resyncs. `game_resumed` is handled implicitly by that refetch,
+      // discarding any local state.
       let raw: unknown
       try {
         raw = JSON.parse(event.data)
       } catch {
-        return // malformed payload — the refetch above resyncs the cache
+        invalidate() // malformed payload — resync from the authoritative view
+        return
       }
       const parsed = GameEventEnvelopeSchema.safeParse(raw)
       if (!parsed.success) {
         if (import.meta.env.DEV) console.warn('SSE payload failed to parse', parsed.error)
-        return // unknown/drifted event shape — degrade to the refetch
+        invalidate() // unknown/drifted event shape — degrade to the refetch
+        return
       }
       const envelope = parsed.data
+      // Chat is data, not a state change: append it to the log stash and skip
+      // the refetch (the GET view carries no chat). Dedup-by-id in `mergeChat`
+      // absorbs the reconnect replay.
+      if (envelope.type === 'chat_message') {
+        queryClient.setQueryData<ChatMessage[]>(gameKeys.chat(id), (prev) =>
+          mergeChat(prev ?? [], envelope),
+        )
+        return
+      }
+      // Every other event means the view moved — refetch the authoritative GET.
+      invalidate()
       // Track the running trick so we can reconstruct the game's final
       // showdown (see `accumulateTrick`).
       trick = accumulateTrick(trick, envelope)
@@ -158,7 +189,7 @@ export function useGameEvents(gameId: string | undefined): void {
         // Refetch on any blip so the cache reflects reality. The browser's
         // native retry would 401 on the spent ticket; once it gives up
         // (CLOSED) we reconnect ourselves with a fresh one.
-        queryClient.invalidateQueries({ queryKey: gameKeys.detail(id) })
+        invalidate()
         if (es?.readyState === EventSource.CLOSED) {
           es = null
           scheduleRetry()

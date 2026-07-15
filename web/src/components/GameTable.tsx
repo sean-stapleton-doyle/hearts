@@ -1,10 +1,10 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 import { api } from '../lib/api'
 import { runDealAnimation, useFlipLayout } from '../lib/anim'
-import { gameKeys } from '../lib/query'
+import { chatOptions, gameKeys } from '../lib/query'
 import { seatNamer } from '../lib/players'
 import { seatLayout, type SeatLayoutMode } from '../lib/seatLayout'
 import { useGameEvents } from '../lib/sse'
@@ -12,9 +12,11 @@ import { useCountdown } from '../hooks/useCountdown'
 import { useDealGate } from '../hooks/useDealGate'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { ActionDock } from './ActionDock'
+import { ChatPanel } from './ChatPanel'
 import { FeltCenter, type FeltStage } from './FeltCenter'
 import { LastTrickPanel } from './TricksPanel'
 import { Scoreboard } from './Scoreboard'
+import { SeatBubble, useSeatBubbles } from './SeatBubble'
 import { TableMenu } from './TableMenu'
 import { TableSeat, type SeatModel } from './TableSeat'
 import type { GameView } from '../lib/types'
@@ -99,16 +101,32 @@ export function GameTable({ view }: { view: GameView }) {
   const scope = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
   const [scoresOpen, setScoresOpen] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
 
-  // Escape closes the mobile scores sheet, matching the backdrop tap.
+  // Chat log: seeded from the history GET, appended by the SSE bridge.
+  const chat = useQuery(chatOptions(view.id))
+  const messages = chat.data ?? []
+  const bubbles = useSeatBubbles(messages, chat.isFetched)
+  const maxChatId = messages.length ? messages[messages.length - 1].id : 0
+  // Unread dot on the Chat button. Baseline to the loaded backlog once (so old
+  // history doesn't read as unread), then track: open marks everything seen.
+  const seenChatId = useRef<number | null>(null)
+  if (seenChatId.current === null && chat.isFetched) seenChatId.current = maxChatId
+  if (chatOpen) seenChatId.current = maxChatId
+  const hasUnreadChat =
+    !chatOpen && seenChatId.current !== null && maxChatId > seenChatId.current
+
+  // Escape closes whichever overlay is open, matching the backdrop tap.
   useEffect(() => {
-    if (!scoresOpen) return
+    if (!scoresOpen && !chatOpen) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setScoresOpen(false)
+      if (e.key !== 'Escape') return
+      setScoresOpen(false)
+      setChatOpen(false)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [scoresOpen])
+  }, [scoresOpen, chatOpen])
 
   const engine = view.game
   const round = engine?.round ?? null
@@ -239,13 +257,23 @@ export function GameTable({ view }: { view: GameView }) {
             </span>
             <TableMenu gameId={view.id} players={view.players} away={engine.away} isHost={isHost} />
           </div>
-          <button
-            type="button"
-            className="ghost table__scores-toggle"
-            onClick={() => setScoresOpen(true)}
-          >
-            Scores
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              className="ghost table__chat-toggle relative"
+              onClick={() => setChatOpen(true)}
+            >
+              Chat
+              {hasUnreadChat && <span className="table__chat-dot" aria-hidden="true" />}
+            </button>
+            <button
+              type="button"
+              className="ghost table__scores-toggle"
+              onClick={() => setScoresOpen(true)}
+            >
+              Scores
+            </button>
+          </div>
         </header>
 
         {/* The felt. Position-only transforms live on seat/play wrappers —
@@ -258,6 +286,9 @@ export function GameTable({ view }: { view: GameView }) {
               style={{ left: `${pl.xPct}%`, top: `${pl.yPct}%` }}
             >
               {seatFor(pl.seat, 'ring')}
+              {/* Top-of-felt seats drop the bubble below so it can't clip off
+                  the felt's top edge. */}
+              <SeatBubble message={bubbles[pl.seat] ?? null} below={pl.yPct < 40} />
             </div>
           ))}
 
@@ -313,6 +344,18 @@ export function GameTable({ view }: { view: GameView }) {
               Close scores
             </button>
           </div>
+        </>
+      )}
+
+      {chatOpen && (
+        <>
+          <div className="sheet-backdrop" onClick={() => setChatOpen(false)} />
+          <ChatPanel
+            gameId={view.id}
+            messages={messages}
+            canSend={view.status === 'in_progress'}
+            onClose={() => setChatOpen(false)}
+          />
         </>
       )}
     </div>
