@@ -1,6 +1,6 @@
 # hearts
 
-Play it now on hearts.seanstapletondoyle.ie
+Play it now on [hearts.seanstapletondoyle.ie](hearts.seanstapletondoyle.ie)
 
 A trick-taking, relative-bidding card game (Oh Hell family) with two
 twists: **hearts are permanent trump**, and **the deck is never
