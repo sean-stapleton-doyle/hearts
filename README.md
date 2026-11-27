@@ -1,5 +1,7 @@
 # hearts
 
+Play it now on hearts.seanstapletondoyle.ie
+
 A trick-taking, relative-bidding card game (Oh Hell family) with two
 twists: **hearts are permanent trump**, and **the deck is never
 reshuffled** — played cards return to the bottom in a fixed order, so the
