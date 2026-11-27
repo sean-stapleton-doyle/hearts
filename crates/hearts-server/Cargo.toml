@@ -16,7 +16,7 @@ serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.11.0"
 sqlx = { version = "0.9.0", features = ["runtime-tokio", "tls-rustls", "postgres", "migrate", "chrono", "uuid"] }
-tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread", "signal", "sync"] }
+tokio = { version = "1.52.3", features = ["fs", "macros", "rt-multi-thread", "signal", "sync"] }
 tokio-stream = { version = "0.1.18", features = ["sync"] }
 tower = "0.5.3"
 tower-http = { version = "0.6", default-features = false, features = ["cors", "trace", "request-id"] }

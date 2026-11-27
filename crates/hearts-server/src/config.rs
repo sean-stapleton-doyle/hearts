@@ -24,8 +24,8 @@ pub struct Config {
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         let database_url = std::env::var("DATABASE_URL").context(
-            "DATABASE_URL is not set — for the compose.yaml dev database use \
-             postgres://hearts:hearts@localhost:5432/hearts (see .env.example)",
+            "DATABASE_URL is not set — for the compose.yaml dev database, \
+             copy .env.example to .env",
         )?;
         let bind_addr = std::env::var("BIND_ADDR")
             .unwrap_or_else(|_| "127.0.0.1:8080".to_string())

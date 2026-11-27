@@ -65,8 +65,8 @@ export function runDealAnimation(opts: {
       // matches — read them back here rather than hardcoding half-dims that
       // would silently drift out of sync with the CSS.
       const rootStyle = getComputedStyle(document.documentElement)
-      const halfW = (parseFloat(rootStyle.getPropertyValue('--card-w')) || 58) / 2
-      const halfH = (parseFloat(rootStyle.getPropertyValue('--card-h')) || 82) / 2
+      const halfW = (Number.parseFloat(rootStyle.getPropertyValue('--card-w')) || 58) / 2
+      const halfH = (Number.parseFloat(rootStyle.getPropertyValue('--card-h')) || 82) / 2
 
       const sorted = [...opts.seats].sort((a, b) => a - b)
       const dealerAt = sorted.indexOf(opts.dealerSeat)
