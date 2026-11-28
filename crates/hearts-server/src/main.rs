@@ -37,7 +37,9 @@ async fn main() -> anyhow::Result<()> {
     // under `logs/`, so a slow request caught after the fact still has its
     // trail on disk. The two outputs get independent filter instances since
     // `EnvFilter` isn't reusable across layers.
-    std::fs::create_dir_all("logs").context("failed to create logs directory")?;
+    tokio::fs::create_dir_all("logs")
+        .await
+        .context("failed to create logs directory")?;
     let file_appender = tracing_appender::rolling::daily("logs", "hearts-server.log");
     let (file_writer, file_guard) = tracing_appender::non_blocking(file_appender);
     tracing_subscriber::registry()

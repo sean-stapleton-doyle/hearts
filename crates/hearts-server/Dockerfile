@@ -12,7 +12,7 @@ WORKDIR /app
 # Rust too.
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
-RUN cargo build --release -p hearts-server
+RUN cargo build --release --locked -p hearts-server
 
 # `sqlx::migrate!()` (crates/hearts-server/src/main.rs) embeds the
 # migrations directory into the binary at compile time, so the runtime
