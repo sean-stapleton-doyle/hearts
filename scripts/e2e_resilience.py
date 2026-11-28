@@ -9,7 +9,7 @@ Subcommands (orchestrated from the shell, with server restarts between):
   lobby-expiry  needs LOBBY_EXPIRY_SECS<=5. Verifies an idle lobby is
                 abandoned within ~expiry + sweep interval.
   setup         (default timeouts) plays a game into round 3 and saves
-                tokens/game id to /tmp/hearts_e2e_state.json.
+                tokens/game id to logs/e2e_resilience_state.json.
   resume        after a server restart: verifies the game came back at
                 round 3's bidding phase, then plays it to completion.
 """
@@ -19,9 +19,12 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 BASE = "http://127.0.0.1:8080"
-STATE_FILE = "/tmp/hearts_e2e_state.json"
+# Repo-local and gitignored, not a predictable name in world-writable /tmp
+# where another local user could plant or read it (it holds session tokens).
+STATE_FILE = Path(__file__).resolve().parent.parent / "logs" / "e2e_resilience_state.json"
 
 
 def req(method, path, token=None, body=None):
@@ -69,6 +72,14 @@ def act_once(game_id, tokens, as_seat=None):
     view, _ = req("GET", f"/games/{game_id}", tokens[0])
     if view["status"] != "in_progress":
         return view, False
+    # A completed round holds the table until the host (seat 0, alice in
+    # new_started_game) acknowledges it; until then every bid/play 409s with
+    # round_pending_ack. Acknowledging is the host's move.
+    if view["game"]["pending_ack"] is not None:
+        if as_seat not in (None, 0):
+            return view, False
+        req("POST", f"/games/{game_id}/continue", tokens[0])
+        return view, True
     nxt = view["game"]["next"]
     if nxt is None or (as_seat is not None and nxt["seat"] != as_seat):
         return view, False
@@ -140,6 +151,7 @@ def cmd_setup():
     else:
         raise SystemExit("FAIL: never reached round 3")
     act_once(game_id, tokens)  # one round-3 bid, to be discarded by recovery
+    STATE_FILE.parent.mkdir(exist_ok=True)
     with open(STATE_FILE, "w") as handle:
         json.dump({"game_id": game_id, "tokens": tokens}, handle)
     print(f"PASS: setup — game {game_id} parked in round 3 with one bid placed")
