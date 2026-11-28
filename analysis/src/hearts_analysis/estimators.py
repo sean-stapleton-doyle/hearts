@@ -64,7 +64,7 @@ def estimate_trick_distribution(
     known_bids: Sequence[int | None],
     candidate_bid: int,
     n_samples: int = 1000,
-    rng: np.random.Generator | None = None,
+    rng: np.random.Generator,
     known_opponent_cards: dict[int, Sequence[int]] | None = None,
 ) -> np.ndarray:
     """Monte Carlo counts of tricks won by ``seat``, over ``n_samples``
@@ -77,8 +77,10 @@ def estimate_trick_distribution(
     removed from the pool other seats draw from. Seats/slots not covered
     fall back to uniform sampling among the remaining unseen cards, exactly
     as with no deck knowledge.
+
+    ``rng`` is required, not defaulted to a fresh unseeded generator: every
+    estimate must be reproducible from the caller's seed.
     """
-    rng = rng or np.random.default_rng()
     counts = np.zeros(cards_dealt + 1, dtype=np.int64)
     known_opponent_cards = known_opponent_cards or {}
     forced = {s: tuple(c) for s, c in known_opponent_cards.items() if c}
@@ -159,7 +161,7 @@ def best_bid(
     known_bids: Sequence[int | None],
     legal_bids: Sequence[int],
     n_samples: int = 1000,
-    rng: np.random.Generator | None = None,
+    rng: np.random.Generator,
     known_opponent_cards: dict[int, Sequence[int]] | None = None,
 ) -> tuple[int, dict[int, float]]:
     """The legal bid maximizing expected `score_delta`, and the value of

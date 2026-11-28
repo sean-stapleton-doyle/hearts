@@ -346,4 +346,24 @@ describe('GameTable', () => {
     renderWithClient(<GameTable view={v} />)
     expect(screen.getByLabelText('Round 1 complete')).toBeTruthy()
   })
+
+  it.each([
+    ['Scores', 'Close scores'],
+    ['Chat', 'Close chat'],
+  ])('closes the %s sheet when its backdrop is tapped', (toggle, closeLabel) => {
+    const { container } = renderWithClient(<GameTable view={myTurnView} />)
+    fireEvent.click(screen.getByRole('button', { name: toggle }))
+    expect(screen.queryAllByRole('button', { name: closeLabel }).length).toBeGreaterThan(0)
+
+    // A native button (SonarQube S6848), kept out of the a11y tree and tab
+    // order since the sheet's own close buttons and Escape cover keyboards.
+    const backdrop = container.querySelector('.sheet-backdrop') as HTMLElement
+    expect(backdrop.tagName).toBe('BUTTON')
+    expect(backdrop.tabIndex).toBe(-1)
+    expect(backdrop.getAttribute('aria-hidden')).toBe('true')
+
+    fireEvent.click(backdrop)
+    expect(screen.queryAllByRole('button', { name: closeLabel })).toHaveLength(0)
+    expect(container.querySelector('.sheet-backdrop')).toBeNull()
+  })
 })
