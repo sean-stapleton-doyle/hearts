@@ -9,7 +9,7 @@ Subcommands (orchestrated from the shell, with server restarts between):
   lobby-expiry  needs LOBBY_EXPIRY_SECS<=5. Verifies an idle lobby is
                 abandoned within ~expiry + sweep interval.
   setup         (default timeouts) plays a game into round 3 and saves
-                tokens/game id to /tmp/hearts_e2e_state.json.
+                tokens/game id to logs/e2e_resilience_state.json.
   resume        after a server restart: verifies the game came back at
                 round 3's bidding phase, then plays it to completion.
 """
@@ -19,9 +19,12 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 BASE = "http://127.0.0.1:8080"
-STATE_FILE = "/tmp/hearts_e2e_state.json"
+# Repo-local and gitignored, not a predictable name in world-writable /tmp
+# where another local user could plant or read it (it holds session tokens).
+STATE_FILE = Path(__file__).resolve().parent.parent / "logs" / "e2e_resilience_state.json"
 
 
 def req(method, path, token=None, body=None):
@@ -148,6 +151,7 @@ def cmd_setup():
     else:
         raise SystemExit("FAIL: never reached round 3")
     act_once(game_id, tokens)  # one round-3 bid, to be discarded by recovery
+    STATE_FILE.parent.mkdir(exist_ok=True)
     with open(STATE_FILE, "w") as handle:
         json.dump({"game_id": game_id, "tokens": tokens}, handle)
     print(f"PASS: setup — game {game_id} parked in round 3 with one bid placed")

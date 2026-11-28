@@ -8,6 +8,7 @@ endpoint (participants only, finished games only).
 
 import json
 import random
+import secrets
 import string
 import urllib.error
 import urllib.request
@@ -69,19 +70,23 @@ def play_out(game_id, tokens):
 
 suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
 username = f"sean-{suffix}"
+# Generated per run rather than a literal, so no credential-shaped string
+# lives in the repo. The deliberately bad inputs below ("short",
+# "wrong-password") stay literal: they're what's under test.
+password = secrets.token_urlsafe(16)
 
 # ── Register / login lifecycle ──────────────────────────────────────────
 alice = session()
 
 result, status = req("POST", "/account/register", alice,
-                     {"username": "x", "password": "longenough"})
+                     {"username": "x", "password": password})
 expect_error(result, status, 400, "invalid_username", "short username")
 result, status = req("POST", "/account/register", alice,
                      {"username": username, "password": "short"})
 expect_error(result, status, 400, "invalid_password", "short password")
 
 result, status = req("POST", "/account/register", alice,
-                     {"username": username.upper(), "password": "hunter2hunter2"})
+                     {"username": username.upper(), "password": password})
 expect(status == 201, f"register: {status}/{result}")
 expect(result["username"] == username, "username normalized to lowercase")
 user_id = result["user_id"]
@@ -93,12 +98,12 @@ me, status = req("GET", "/me", alice)
 expect(status == 200 and me["username"] == username, f"/me after register: {me}")
 
 result, status = req("POST", "/account/register", alice,
-                     {"username": f"other-{suffix}", "password": "hunter2hunter2"})
+                     {"username": f"other-{suffix}", "password": password})
 expect_error(result, status, 409, "already_logged_in", "second register on session")
 
 other = session()
 result, status = req("POST", "/account/register", other,
-                     {"username": username, "password": "hunter2hunter2"})
+                     {"username": username, "password": password})
 expect_error(result, status, 409, "username_taken", "duplicate username")
 
 req("POST", "/account/logout", alice)
@@ -113,7 +118,7 @@ result, status = req("POST", "/account/login", alice,
 expect_error(result, status, 401, "invalid_credentials", "unknown user")
 
 result, status = req("POST", "/account/login", alice,
-                     {"username": username, "password": "hunter2hunter2"})
+                     {"username": username, "password": password})
 expect(status == 200 and result["user_id"] == user_id, f"login: {result}")
 alice = result["token"]  # login also rotates
 
@@ -181,7 +186,7 @@ req("POST", f"/games/{game2['id']}/start", carol)
 play_out(game2["id"], {0: carol, 1: dave})
 
 carol_name = f"carol-{suffix}"
-result, _ = req("POST", "/account/register", carol, {"username": carol_name, "password": "hunter2hunter2"})
+result, _ = req("POST", "/account/register", carol, {"username": carol_name, "password": password})
 carol = result["token"]
 history, _ = req("GET", "/me/games", carol)
 entry = next((g for g in history["games"] if g["id"] == game2["id"]), None)
