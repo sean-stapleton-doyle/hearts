@@ -69,6 +69,14 @@ def act_once(game_id, tokens, as_seat=None):
     view, _ = req("GET", f"/games/{game_id}", tokens[0])
     if view["status"] != "in_progress":
         return view, False
+    # A completed round holds the table until the host (seat 0, alice in
+    # new_started_game) acknowledges it; until then every bid/play 409s with
+    # round_pending_ack. Acknowledging is the host's move.
+    if view["game"]["pending_ack"] is not None:
+        if as_seat not in (None, 0):
+            return view, False
+        req("POST", f"/games/{game_id}/continue", tokens[0])
+        return view, True
     nxt = view["game"]["next"]
     if nxt is None or (as_seat is not None and nxt["seat"] != as_seat):
         return view, False
