@@ -94,6 +94,24 @@ function useFinaleBeat(gateOpen: boolean, pendingAck: number | null, hasFinale: 
   return done
 }
 
+/**
+ * Tap-outside-to-close layer behind a sheet. A native button so the click
+ * handler sits on a real interactive element, but hidden from assistive tech
+ * and the tab order: every sheet already has labelled close buttons, and
+ * Escape closes it too, so this is a pointer-only convenience.
+ */
+function SheetBackdrop({ onClose }: { onClose: () => void }) {
+  return (
+    <button
+      type="button"
+      className="sheet-backdrop"
+      tabIndex={-1}
+      aria-hidden="true"
+      onClick={onClose}
+    />
+  )
+}
+
 export function GameTable({ view }: { view: GameView }) {
   // SSE is live only mid-game; the hook leaves the stream closed otherwise.
   useGameEvents(view.status === 'in_progress' ? view.id : undefined)
@@ -337,7 +355,7 @@ export function GameTable({ view }: { view: GameView }) {
 
       {scoresOpen && (
         <>
-          <div className="sheet-backdrop" onClick={() => setScoresOpen(false)} />
+          <SheetBackdrop onClose={() => setScoresOpen(false)} />
           <div className="sheet">
             <Scoreboard view={view} onClose={() => setScoresOpen(false)} />
             <button type="button" className="sheet__close" onClick={() => setScoresOpen(false)}>
@@ -349,7 +367,7 @@ export function GameTable({ view }: { view: GameView }) {
 
       {chatOpen && (
         <>
-          <div className="sheet-backdrop" onClick={() => setChatOpen(false)} />
+          <SheetBackdrop onClose={() => setChatOpen(false)} />
           <ChatPanel
             gameId={view.id}
             messages={messages}
