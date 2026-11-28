@@ -9,11 +9,13 @@ from hearts_analysis.experiments import baseline
 
 
 @pytest.mark.smoke
-def test_baseline_smoke(tmp_path):
+def test_baseline_smoke(tmp_path, monkeypatch):
+    # --out must stay under the working directory (hearts_analysis.paths).
+    monkeypatch.chdir(tmp_path)
     out = tmp_path / "exp"
     baseline.main([
         "--players", "4", "--games", "20", "--bots", "heuristic,random,heuristic,random",
-        "--seed", "3", "--out", str(out), "--record-plays",
+        "--seed", "3", "--out", "exp", "--record-plays",
     ])
     frames = records.load_experiment(out)
     assert set(frames) == {"games", "rounds", "plays"}

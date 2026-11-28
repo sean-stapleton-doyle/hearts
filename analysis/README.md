@@ -26,7 +26,10 @@ crate declares `[tool.uv] cache-keys` over its `.rs` files); if in doubt,
   interfaces, game runner, record schemas, estimators, deck model, solvers.
 - `src/hearts_analysis/experiments/` — CLIs (`uv run python -m
   hearts_analysis.experiments.baseline --help`) that write parquet + a
-  `manifest.json` under `data/<experiment>/`.
+  `manifest.json` under `data/<experiment>/`. `--out` must resolve inside the
+  directory you run from (`hearts_analysis.paths.safe_out_dir`); anything
+  else, including `..` or a symlink that points out, is refused before the
+  run starts.
 - `notebooks/` — narrative analysis; notebooks read only from `data/`.
 - `data/` — experiment outputs (gitignored).
 

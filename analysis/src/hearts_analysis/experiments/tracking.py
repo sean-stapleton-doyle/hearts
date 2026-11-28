@@ -20,6 +20,7 @@ import pyhearts
 
 from .. import records, runner, seeds
 from ..deck_model import DeckModel
+from ..paths import safe_out_dir
 from ..policies import DeckTrackerPolicy, HeuristicPolicy, MCBidderPolicy
 
 
@@ -119,16 +120,17 @@ def main(argv: list[str] | None = None) -> None:
     edge.add_argument("--out", type=Path, default=Path("data/tracking/edge"))
 
     args = ap.parse_args(argv)
+    out = safe_out_dir(args.out)
     t0 = time.perf_counter()
     if args.cmd == "information":
         df = run_information(args.players, args.games, args.seed, args.workers)
-        args.out.mkdir(parents=True, exist_ok=True)
-        df.to_parquet(args.out / "information.parquet", index=False)
+        out.mkdir(parents=True, exist_ok=True)
+        df.to_parquet(out / "information.parquet", index=False)
         dt = time.perf_counter() - t0
-        print(f"{args.games} games -> {len(df)} rows in {dt:.1f}s -> {args.out}")
+        print(f"{args.games} games -> {len(df)} rows in {dt:.1f}s -> {out}")
         print(df.groupby("round_index")["frac_known"].mean().round(3).to_string())
     else:
-        out = run_edge(args.games, args.mc_samples, args.seed, args.workers, args.out)
+        out = run_edge(args.games, args.mc_samples, args.seed, args.workers, out)
         dt = time.perf_counter() - t0
         paired = pd.read_parquet(out / "paired_games.parquet")
         print(f"{args.games} paired games in {dt:.1f}s -> {out}")

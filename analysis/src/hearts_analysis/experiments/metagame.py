@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 
 from .. import records, runner
+from ..paths import safe_out_dir
 from ..policies import REGISTRY
 
 POLICIES = ["random", "heuristic", "mc_bidder", "deck_tracker"]
@@ -56,13 +57,14 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--out", type=Path, default=Path("data/metagame"))
     args = ap.parse_args(argv)
+    out = safe_out_dir(args.out)
 
     t0 = time.perf_counter()
     payoff = build_payoff_matrix(args.games, args.seed, args.workers)
     dt = time.perf_counter() - t0
 
-    args.out.mkdir(parents=True, exist_ok=True)
-    payoff.to_parquet(args.out / "payoff_matrix.parquet")
+    out.mkdir(parents=True, exist_ok=True)
+    payoff.to_parquet(out / "payoff_matrix.parquet")
     print(f"{len(POLICIES)}x{len(POLICIES)} matchups, {args.games} games each, in {dt:.1f}s")
     print(payoff.round(2).to_string())
 

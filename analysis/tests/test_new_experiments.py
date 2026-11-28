@@ -9,6 +9,13 @@ import pytest
 from hearts_analysis.experiments import counting, dealer_edge, play_styles, strategy_sweep
 
 
+@pytest.fixture(autouse=True)
+def _run_from_tmp_path(tmp_path, monkeypatch):
+    # The CLIs refuse an --out outside the working directory
+    # (hearts_analysis.paths), so run each test from its own tmp dir.
+    monkeypatch.chdir(tmp_path)
+
+
 def test_strategy_sweep_candidates_shape():
     with_grid = strategy_sweep.candidates(include_grid=True)
     without = strategy_sweep.candidates(include_grid=False)

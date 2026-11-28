@@ -19,6 +19,7 @@ from pathlib import Path
 import pandas as pd
 
 from .. import records, runner
+from ..paths import safe_out_dir
 from ..policies import REGISTRY
 from ..policies.feature_bidder import PRESETS, FeatureBidderPolicy, grid
 
@@ -81,6 +82,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--no-grid", action="store_true", help="presets and baselines only")
     ap.add_argument("--out", type=Path, default=Path("data/strategy_sweep"))
     args = ap.parse_args(argv)
+    out = safe_out_dir(args.out)
 
     t0 = time.perf_counter()
     games, rounds = run(
@@ -89,11 +91,11 @@ def main(argv: list[str] | None = None) -> None:
     )
     dt = time.perf_counter() - t0
 
-    args.out.mkdir(parents=True, exist_ok=True)
-    games.to_parquet(args.out / "games.parquet", index=False)
-    rounds.to_parquet(args.out / "rounds.parquet", index=False)
+    out.mkdir(parents=True, exist_ok=True)
+    games.to_parquet(out / "games.parquet", index=False)
+    rounds.to_parquet(out / "rounds.parquet", index=False)
     summary = games.groupby("candidate")["final_score"].agg(["mean", "std", "count"])
-    print(f"{games['candidate'].nunique()} candidates x {args.games} games in {dt:.1f}s -> {args.out}")
+    print(f"{games['candidate'].nunique()} candidates x {args.games} games in {dt:.1f}s -> {out}")
     print(summary.sort_values("mean", ascending=False).round(2).to_string())
 
 

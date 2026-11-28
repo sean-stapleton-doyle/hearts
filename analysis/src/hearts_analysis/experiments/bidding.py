@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 
 from .. import cards, estimators
+from ..paths import safe_out_dir
 
 
 def sample_hand(rng: np.random.Generator, size: int) -> tuple[int, ...]:
@@ -65,6 +66,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--out", type=Path, default=Path("data/bidding/table"))
     args = ap.parse_args(argv)
+    out = safe_out_dir(args.out)
 
     players = [int(p) for p in args.players.split(",")]
     rounds = [int(r) for r in args.rounds.split(",")]
@@ -72,10 +74,10 @@ def main(argv: list[str] | None = None) -> None:
     df = build_table(players, rounds, args.hands, args.mc_samples, args.seed)
     dt = time.perf_counter() - t0
 
-    args.out.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(args.out / "bid_table.parquet", index=False)
+    out.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(out / "bid_table.parquet", index=False)
     print(f"{len(df)} rows ({args.hands} hands x {len(rounds)} round sizes x "
-          f"{len(players)} table sizes) in {dt:.1f}s -> {args.out}")
+          f"{len(players)} table sizes) in {dt:.1f}s -> {out}")
 
 
 if __name__ == "__main__":
