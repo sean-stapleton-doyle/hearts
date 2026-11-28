@@ -23,6 +23,7 @@ from pathlib import Path
 import pandas as pd
 
 from .. import records, runner
+from ..paths import safe_out_dir
 from ..policies import CountingPolicy, HeuristicPolicy, MCBidderPolicy
 from ..policies.counters import LEVELS
 
@@ -86,16 +87,17 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--out", type=Path, default=Path("data/counting"))
     args = ap.parse_args(argv)
+    out = safe_out_dir(args.out)
 
     t0 = time.perf_counter()
     df = run(args.games, args.mc_samples, args.seed, args.workers)
     dt = time.perf_counter() - t0
 
-    args.out.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(args.out / "ablation.parquet", index=False)
+    out.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(out / "ablation.parquet", index=False)
     summary = df.groupby(["level", "use"])["edge"].agg(["mean", "std", "count"])
     print(f"{len(LEVELS)} levels x {len(USES)} channels x {args.games} games "
-          f"in {dt:.1f}s -> {args.out}")
+          f"in {dt:.1f}s -> {out}")
     print(summary.round(3).to_string())
 
 

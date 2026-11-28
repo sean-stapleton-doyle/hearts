@@ -16,6 +16,7 @@ from functools import partial
 from pathlib import Path
 
 from .. import records, runner
+from ..paths import safe_out_dir
 from ..policies import REGISTRY
 
 
@@ -33,7 +34,7 @@ def run(args: argparse.Namespace) -> Path:
     if unknown:
         raise SystemExit(f"unknown bots {unknown}; known: {sorted(REGISTRY)}")
 
-    out = args.out or Path("data/baseline") / f"{'-'.join(names)}_{args.players}p"
+    out = safe_out_dir(args.out or Path("data/baseline") / f"{'-'.join(names)}_{args.players}p")
     t0 = time.perf_counter()
     recs = runner.play_games(
         args.seed, args.games, partial(_make_table, tuple(names)),

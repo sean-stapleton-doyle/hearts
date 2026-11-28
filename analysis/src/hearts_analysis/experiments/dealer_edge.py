@@ -19,6 +19,7 @@ from pathlib import Path
 import pandas as pd
 
 from .. import records, runner
+from ..paths import safe_out_dir
 from ..policies import REGISTRY
 
 POLICIES = ("heuristic", "random")
@@ -48,13 +49,14 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--out", type=Path, default=Path("data/dealer_edge"))
     args = ap.parse_args(argv)
+    out = safe_out_dir(args.out)
 
     t0 = time.perf_counter()
-    run(args.games, args.seed, args.workers, args.out)
+    run(args.games, args.seed, args.workers, out)
     dt = time.perf_counter() - t0
-    print(f"{len(POLICIES)} policies x {args.games} games in {dt:.1f}s -> {args.out}")
+    print(f"{len(POLICIES)} policies x {args.games} games in {dt:.1f}s -> {out}")
     for policy in POLICIES:
-        g = pd.read_parquet(args.out / policy / "games.parquet")
+        g = pd.read_parquet(out / policy / "games.parquet")
         by_seat = g.groupby("seat")["final_score"].mean()
         print(f"{policy}: seat0 {by_seat[0]:.2f}  seat1 {by_seat[1]:.2f}  "
               f"edge {(by_seat[0] - by_seat[1]):+.2f}")

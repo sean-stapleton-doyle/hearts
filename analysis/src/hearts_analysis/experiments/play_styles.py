@@ -16,6 +16,7 @@ from pathlib import Path
 import pandas as pd
 
 from .. import records, runner
+from ..paths import safe_out_dir
 from ..policies import PhasedPolicy, StyledPlayPolicy
 
 
@@ -88,18 +89,19 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--out", type=Path, default=Path("data/play_styles"))
     args = ap.parse_args(argv)
+    out = safe_out_dir(args.out)
 
     t0 = time.perf_counter()
-    run(args.players, args.games, args.seed, args.workers, args.out)
+    run(args.players, args.games, args.seed, args.workers, out)
     dt = time.perf_counter() - t0
 
     rows = []
     for label in CANDIDATES:
         safe = label.replace(":", "_").replace(",", "-")
-        g = pd.read_parquet(args.out / safe / "games.parquet")
+        g = pd.read_parquet(out / safe / "games.parquet")
         rows.append({"candidate": label,
                      "mean_score": g.query("seat == 0")["final_score"].mean()})
-    print(f"{len(CANDIDATES)} candidates x {args.games} games in {dt:.1f}s -> {args.out}")
+    print(f"{len(CANDIDATES)} candidates x {args.games} games in {dt:.1f}s -> {out}")
     print(pd.DataFrame(rows).sort_values("mean_score", ascending=False).round(2).to_string(index=False))
 
 
